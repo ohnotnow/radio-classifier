@@ -20,7 +20,9 @@ def main(argv=None):
     p = sub.add_parser("transcribe", help="Speech-to-text the start of candidate files")
     p.add_argument("--seconds", type=int, default=180, help="Seconds to transcribe; 0 = whole file (default: 180)")
     p.add_argument("--limit", type=int, help="Stop after N files")
-    p.add_argument("--model", default=transcribe_mod.DEFAULT_MODEL)
+    p.add_argument("--model", default=transcribe_mod.DEFAULT_MODEL,
+                   help="Parakeet model on Hugging Face, e.g. mlx-community/parakeet-tdt-0.6b-v3 "
+                        "for multilingual audio (default: %(default)s)")
     p.add_argument("--verdict", default="likely", help="Comma list: likely,maybe,unlikely or all (default: likely)")
     p.add_argument("--deepen", action="store_true", help="Also re-transcribe files whose existing transcript is shorter than --seconds")
     p.add_argument("--exclude", action="append", default=[], metavar="REGEX",
@@ -54,6 +56,8 @@ def main(argv=None):
     sub.add_parser("stats", help="Collection and progress counts")
 
     args = parser.parse_args(argv)
+    if args.command == "transcribe" and "parakeet" not in args.model.lower():
+        parser.error(f"--model must be a Parakeet model, got {args.model}")
     con = db.connect(args.db)
     try:
         if args.command == "scan":

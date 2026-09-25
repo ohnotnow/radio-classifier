@@ -83,7 +83,7 @@ If you want manual control over the transcription schedule, `--gentle` forces CP
 |---|---|
 | `scan ROOT` | Walk a directory tree and record audio metadata. Incremental; prunes files that have gone. |
 | `classify` | Score every file: likely / maybe / unlikely drama. |
-| `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip shows you don't need indexed, `--model` to use a different Hugging Face model, plus `--workday`, `--gentle`, `--pause`. |
+| `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip shows you don't need indexed, `--model` to use a different Parakeet model (e.g. `mlx-community/parakeet-tdt-0.6b-v3` for multilingual audio), plus `--workday`, `--gentle`, `--pause`. |
 | `search QUERY` | Full-text search over transcripts, paths and tags, with the time of the first matching sentence where known. `--any` matches any word instead of all. |
 | `grep PATTERN` | Case-insensitive regex over paths and tags. Works before anything is transcribed. |
 | `show ID` | One file's metadata, verdict, score reasons and transcript. |

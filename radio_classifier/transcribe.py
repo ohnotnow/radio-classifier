@@ -87,32 +87,17 @@ def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
 
 def make_asr(model):
     """Returns wav -> (text, [(start, end, sentence), ...])."""
-    if "parakeet" in model.lower():
-        from parakeet_mlx import DecodingConfig, SentenceConfig, from_pretrained
+    from parakeet_mlx import DecodingConfig, SentenceConfig, from_pretrained
 
-        pk = from_pretrained(model)
-        # Unpunctuated monologues otherwise become one 145-second "sentence". max_words (~10-12s of
-        # speech) rather than max_duration, which splits mid-word ("untut" / "ored").
-        decoding = DecodingConfig(sentence=SentenceConfig(max_words=30))
-
-        def run(wav):
-            # Unchunked, a 28-minute file asks Metal for 29 GB and fails; 180s chunks peak under 4 GB.
-            result = pk.transcribe(wav, chunk_duration=180, decoding_config=decoding)
-            return result.text.strip(), [(s.start, s.end, s.text.strip()) for s in result.sentences]
-
-        return run
-
-    import mlx_whisper
+    pk = from_pretrained(model)
+    # Unpunctuated monologues otherwise become one 145-second "sentence". max_words (~10-12s of
+    # speech) rather than max_duration, which splits mid-word ("untut" / "ored").
+    decoding = DecodingConfig(sentence=SentenceConfig(max_words=30))
 
     def run(wav):
-        result = mlx_whisper.transcribe(
-            wav,
-            path_or_hf_repo=model,
-            language="en",
-            condition_on_previous_text=False,
-            verbose=None,
-        )
-        return result["text"].strip(), [(s["start"], s["end"], s["text"].strip()) for s in result["segments"]]
+        # Unchunked, a 28-minute file asks Metal for 29 GB and fails; 180s chunks peak under 4 GB.
+        result = pk.transcribe(wav, chunk_duration=180, decoding_config=decoding)
+        return result.text.strip(), [(s.start, s.end, s.text.strip()) for s in result.sentences]
 
     return run
 
