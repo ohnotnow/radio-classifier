@@ -1,0 +1,12 @@
+[project]
+name = "radio-classifier"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mlx-whisper>=0.4.3",
+    "mutagen>=1.48.1",
+    "parakeet-mlx>=0.5.2",
+    "tqdm>=4.69.0",
+]
