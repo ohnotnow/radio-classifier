@@ -1,12 +1,31 @@
 import os
 import re
 import sqlite3
+import sys
 
 
 def fmt_duration(seconds):
     if not seconds:
         return "?"
     return f"{int(seconds) // 60}m{int(seconds) % 60:02d}"
+
+
+def fmt_clock(seconds):
+    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
+
+
+def fmt_srt_time(seconds):
+    ms = round(seconds * 1000)
+    return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
+
+
+def first_hit(con, file_id, words):
+    """Earliest sentence mentioning any query word, so a hit can say where in the file to look."""
+    for row in con.execute("SELECT start, text FROM segments WHERE file_id = ? ORDER BY start", (file_id,)):
+        lowered = row["text"].lower()
+        if any(w in lowered for w in words):
+            return row
+    return None
 
 
 def quoted_query(query, any_word=False):
@@ -33,10 +52,14 @@ def search(con, query, limit=20, any_word=False):
     if not rows:
         print("No matches.")
         return 1
+    words = [w.lower() for w in query.split()]
     for row in rows:
         print(f"[{row['id']}] ({fmt_duration(row['duration'])}, {row['verdict']}) {row['path']}")
         if row["snip"]:
             print(f"      {row['snip']}")
+        hit = first_hit(con, row["id"], words)
+        if hit:
+            print(f"      first at {fmt_clock(hit['start'])}: {hit['text'][:100]}")
     return 0
 
 
@@ -86,6 +109,25 @@ def show(con, file_id):
         print(f"  transcript ({t['seconds']:.0f}s, {t['model']}):")
         print()
         print("  " + t["text"])
+    return 0
+
+
+def export(con, file_id, plain=False):
+    t = con.execute("SELECT text, error FROM transcripts WHERE file_id = ?", (file_id,)).fetchone()
+    if t is None or t["error"]:
+        print(f"No transcript for id {file_id}", file=sys.stderr)
+        return 1
+    if plain:
+        print(t["text"])
+        return 0
+    segments = con.execute(
+        "SELECT start, end, text FROM segments WHERE file_id = ? ORDER BY start", (file_id,)
+    ).fetchall()
+    if not segments:
+        print(f"No timestamps for id {file_id}; re-transcribe it, or use --plain", file=sys.stderr)
+        return 1
+    for n, seg in enumerate(segments, 1):
+        print(f"{n}\n{fmt_srt_time(seg['start'])} --> {fmt_srt_time(seg['end'])}\n{seg['text']}\n")
     return 0
 
 

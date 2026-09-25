@@ -1,0 +1,34 @@
+# radio-classifier
+
+Local CLI that finds radio dramas in a large, badly named audio collection by transcribing them. See README.md for the user-facing picture, and run `ant foundation` at the start of a session for the project's purpose and design commitments (`ant list` has the rest of the notes).
+
+## Running things
+
+- `uv run python -m radio_classifier <command>`; commands are `scan`, `classify`, `transcribe`, `search`, `grep`, `show`, `export`, `stats`.
+- Scratch scripts that import the package need `PYTHONPATH=.` (it isn't installed as a package).
+- There is no test suite yet.
+
+## Data you must not damage
+
+- `radio.db` in the repo root is the owner's real database (gitignored): 41,000 scanned files and days of transcription work. Inspect it with `sqlite3 -readonly radio.db`. Never delete or rebuild it; test experiments in scratch scripts that don't write to it, and ask before any run that rewrites existing transcripts.
+- The audio collection itself is strictly read-only. Nothing in this project writes to the source drive.
+
+## Layout
+
+- `cli.py`: argparse subcommands, dispatches to the modules below.
+- `db.py`: schema (`files`, `transcripts`, `segments`, FTS5 `search_index`) and write helpers.
+- `scan.py`, `classify.py`: metadata sweep and heuristic scoring.
+- `transcribe.py`: candidate selection (`pick_candidates`), ffmpeg clipping, ASR (`make_asr`), the per-file commit loop, `--workday` scheduling.
+- `search.py`: `search`, `grep`, `show`, `export`, `stats`.
+
+## Things learned the hard way
+
+- parakeet-mlx must be called with `chunk_duration`: unchunked, a 28 minute file asks Metal for 29GB and fails. 180s chunks peak under 4GB, and sentence timestamps stay absolute across chunk joins (checked: last sentence ends at the file's length).
+- Sentence length is capped with `SentenceConfig(max_words=30)`, not `max_duration`, which splits mid-word.
+- `--deepen` does nothing unless `--seconds` is larger than the existing transcripts (use `--seconds 0` for whole files). It skips files that already have a whole-file transcript, so re-doing those needs a one-off script (e.g. swap `transcribe.pick_candidates` for a function returning the rows you want, then call `transcribe.transcribe`).
+- `mx.clear_cache()` after every file is load-bearing: without it the MLX buffer cache grew to 11.6GB over 80 files.
+- Output from `uv run ... | grep` is block-buffered, so progress lines only appear at the end of a background run; check progress in the database instead.
+
+## Hardware
+
+The owner's machine is an M6 Mac mini with 24GB. Measured there: GPU about 80x real time on whole files, CPU (`--gentle`) about 3x slower than GPU. Older numbers in the ant notes are from an M1.

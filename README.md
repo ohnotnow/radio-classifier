@@ -14,6 +14,8 @@ radio-classifier works in three stages, each a separate command you can run and 
 
 Then `search` finds things by what was said in them. An actor's name, a title fragment, a plot detail from the opening scene.
 
+Once the first pass is done you can go further and transcribe whole files (see below), which makes plot details from anywhere in a serial searchable and records a timestamp for every sentence.
+
 Everything runs locally, apart from a one-time model download from Hugging Face (about 2.5GB).
 
 ## Prerequisites
@@ -55,7 +57,25 @@ Start it once and leave it for days:
 caffeinate -i uv run python -m radio_classifier transcribe --workday
 ```
 
-If you want manual control instead, `--gentle` forces CPU-only mode and `--pause N` sleeps N seconds between files. Running the whole thing under `taskpolicy -c background` makes it politer still.
+## Whole-file transcripts and timestamps
+
+The three-minute pass finds the continuity announcement, but the detail you actually remember ("his girlfriend had a shop") might turn up twenty minutes into episode four. Once the first pass is done, re-transcribe the candidates in full:
+
+```sh
+caffeinate -i uv run python -m radio_classifier transcribe --deepen --seconds 0 --workday
+```
+
+Whole files are processed in 180 second chunks, so memory stays under 4GB whatever the length. Every sentence is stored with its start and end time, and `search` then tells you where in the file the first match is:
+
+```
+[35146] (25m34, likely) /Volumes/BigDisk/music/Jim Eldridge/Unknown Album/760508 Down Payment On Death 2_5.mp3
+       ... What about the >>shop<<? To hell with a >>shop<<. It's because of this attack, isn't it? ...
+      first at 11:22: What about the shop?
+```
+
+`export ID` prints a transcript as SRT subtitles, which most media players will load alongside the audio (`export 35146 > "Down Payment On Death 2_5.srt"`). `--plain` gives just the text. Files that only have a three-minute transcript have no timestamps, so `export` needs `--plain` for those.
+
+If you want manual control over the transcription schedule, `--gentle` forces CPU-only mode and `--pause N` sleeps N seconds between files. Running the whole thing under `taskpolicy -c background` makes it politer still.
 
 ## Commands
 
@@ -64,9 +84,10 @@ If you want manual control instead, `--gentle` forces CPU-only mode and `--pause
 | `scan ROOT` | Walk a directory tree and record audio metadata. Incremental; prunes files that have gone. |
 | `classify` | Score every file: likely / maybe / unlikely drama. |
 | `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip shows you don't need indexed, `--model` to use a different Hugging Face model, plus `--workday`, `--gentle`, `--pause`. |
-| `search QUERY` | Full-text search over transcripts, paths and tags. `--any` matches any word instead of all. |
+| `search QUERY` | Full-text search over transcripts, paths and tags, with the time of the first matching sentence where known. `--any` matches any word instead of all. |
 | `grep PATTERN` | Case-insensitive regex over paths and tags. Works before anything is transcribed. |
 | `show ID` | One file's metadata, verdict, score reasons and transcript. |
+| `export ID` | A transcript as SRT subtitles. `--plain` for text only. |
 | `stats` | Collection totals and transcription progress. |
 
 ## How the classifier decides
@@ -77,14 +98,16 @@ The `--exclude` flag is for spoken-word you own but don't need indexed. Panel ga
 
 ## Performance
 
-Measured on one M-series Mac with 180 second clips, so treat as a guide rather than a promise:
+Measured on two Macs, so treat these as a guide rather than a promise. Per-file times include decoding and saving.
 
-| Mode | Per file | Files per hour |
-|---|---|---|
-| GPU | ~9.5s | ~380 |
-| CPU (`--gentle`) | ~15.5s | ~225 |
+| Machine | Mode | 180s clip | Whole 28 minute episode |
+|---|---|---|---|
+| M1 | GPU | ~9.5s | not measured |
+| M1 | CPU (`--gentle`) | ~15.5s | not measured |
+| M6 | GPU | ~2s | ~21s (about 80x real time) |
+| M6 | CPU (`--gentle`) | ~6.5s | ~65s |
 
-A 41,000 file collection produced about 10,000 drama candidates, which is two or three overnight GPU runs, or four to five days of `--workday`.
+A 41,000 file collection produced about 10,000 drama candidates, around 5,600 hours of audio. On the M6 the three-minute pass took one evening; transcribing every candidate in full is roughly 70 hours of GPU time, longer under `--workday` because daytime runs on the CPU.
 
 ## Contributing
 

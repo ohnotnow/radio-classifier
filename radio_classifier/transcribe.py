@@ -86,21 +86,35 @@ def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
 
 
 def make_asr(model):
+    """Returns wav -> (text, [(start, end, sentence), ...])."""
     if "parakeet" in model.lower():
-        from parakeet_mlx import from_pretrained
+        from parakeet_mlx import DecodingConfig, SentenceConfig, from_pretrained
 
         pk = from_pretrained(model)
-        return lambda wav: pk.transcribe(wav).text.strip()
+        # Unpunctuated monologues otherwise become one 145-second "sentence". max_words (~10-12s of
+        # speech) rather than max_duration, which splits mid-word ("untut" / "ored").
+        decoding = DecodingConfig(sentence=SentenceConfig(max_words=30))
+
+        def run(wav):
+            # Unchunked, a 28-minute file asks Metal for 29 GB and fails; 180s chunks peak under 4 GB.
+            result = pk.transcribe(wav, chunk_duration=180, decoding_config=decoding)
+            return result.text.strip(), [(s.start, s.end, s.text.strip()) for s in result.sentences]
+
+        return run
 
     import mlx_whisper
 
-    return lambda wav: mlx_whisper.transcribe(
-        wav,
-        path_or_hf_repo=model,
-        language="en",
-        condition_on_previous_text=False,
-        verbose=None,
-    )["text"].strip()
+    def run(wav):
+        result = mlx_whisper.transcribe(
+            wav,
+            path_or_hf_repo=model,
+            language="en",
+            condition_on_previous_text=False,
+            verbose=None,
+        )
+        return result["text"].strip(), [(s["start"], s["end"], s["text"].strip()) for s in result["segments"]]
+
+    return run
 
 
 def in_workday_hours():
@@ -147,7 +161,7 @@ def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
         os.close(fd)
         try:
             clip_to_wav(row["path"], seconds, wav_path)
-            text = asr(wav_path)
+            text, segments = asr(wav_path)
             actual = min(seconds, row["duration"]) if (seconds > 0 and row["duration"]) else (row["duration"] or seconds)
             con.execute(
                 "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, ?, ?, NULL)",
@@ -155,6 +169,8 @@ def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
             )
             db.index_transcript(con, row["id"], text, row["path"],
                                 row["artist"], row["album"], row["title"])
+            # Chunk joins can leave a sentence a fraction of a second out of order.
+            db.save_segments(con, row["id"], sorted(segments))
             done += 1
             status = f"{time.time() - t0:5.1f}s"
         except Exception as exc:
@@ -162,6 +178,7 @@ def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
                 "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, 0, '', ?)",
                 (row["id"], model, str(exc)[:500]),
             )
+            db.save_segments(con, row["id"], [])
             failed += 1
             status = f"FAILED ({str(exc)[:80]})"
         finally:

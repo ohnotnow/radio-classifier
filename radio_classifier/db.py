@@ -29,6 +29,15 @@ CREATE TABLE IF NOT EXISTS transcripts (
     created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Sentence-level timings for a transcript, so a hit can say where in the file it is.
+CREATE TABLE IF NOT EXISTS segments (
+    file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    start REAL NOT NULL,
+    end REAL NOT NULL,
+    text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_segments_file ON segments(file_id, start);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     text, path, artist, album, title,
     tokenize = 'porter unicode61'
@@ -52,6 +61,15 @@ def index_transcript(con, file_id, text, path, artist, album, title):
     )
 
 
+def save_segments(con, file_id, segments):
+    con.execute("DELETE FROM segments WHERE file_id = ?", (file_id,))
+    con.executemany(
+        "INSERT INTO segments (file_id, start, end, text) VALUES (?, ?, ?, ?)",
+        [(file_id, start, end, text) for start, end, text in segments],
+    )
+
+
 def forget_file(con, file_id):
+    con.execute("DELETE FROM segments WHERE file_id = ?", (file_id,))
     con.execute("DELETE FROM search_index WHERE rowid = ?", (file_id,))
     con.execute("DELETE FROM transcripts WHERE file_id = ?", (file_id,))

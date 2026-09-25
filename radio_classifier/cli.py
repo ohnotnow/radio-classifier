@@ -47,6 +47,10 @@ def main(argv=None):
     p = sub.add_parser("show", help="Show one file's metadata, verdict and transcript")
     p.add_argument("id", type=int)
 
+    p = sub.add_parser("export", help="Print one file's transcript as SRT subtitles")
+    p.add_argument("id", type=int)
+    p.add_argument("--plain", action="store_true", help="Just the text, no timestamps")
+
     sub.add_parser("stats", help="Collection and progress counts")
 
     args = parser.parse_args(argv)
@@ -70,6 +74,8 @@ def main(argv=None):
             return search_mod.grep(con, args.pattern, limit=args.limit)
         if args.command == "show":
             return search_mod.show(con, args.id)
+        if args.command == "export":
+            return search_mod.export(con, args.id, plain=args.plain)
         if args.command == "stats":
             return search_mod.stats(con)
     finally:
