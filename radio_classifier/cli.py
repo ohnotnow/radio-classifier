@@ -1,7 +1,7 @@
 import argparse
 
 from . import classify as classify_mod
-from . import db, scan as scan_mod, search as search_mod, transcribe as transcribe_mod
+from . import db, scan as scan_mod, search as search_mod, summarise as summarise_mod, transcribe as transcribe_mod
 
 
 def main(argv=None):
@@ -36,6 +36,13 @@ def main(argv=None):
                    help="Set-and-forget for multi-day runs: gentle CPU mode "
                         "07:00-23:00 so the computer stays usable, full-speed GPU "
                         "overnight with a cool-down pause so the fans stay quiet")
+
+    p = sub.add_parser("summarise", help="LLM blurb per story, and a summary per drama/reading episode")
+    p.add_argument("--like", metavar="PATTERN", help="Only files whose path matches this SQL LIKE pattern")
+    p.add_argument("--limit", type=int, help="Stop after N stories")
+    p.add_argument("--exclude", action="append", default=[], metavar="REGEX",
+                   help="Skip folders whose path matches (repeatable)")
+    p.add_argument("--dry-run", action="store_true", help="List the stories that would be summarised; no LLM calls")
 
     p = sub.add_parser("search", help="Full-text search transcripts (and paths/tags)")
     p.add_argument("query", nargs="+")
@@ -72,6 +79,9 @@ def main(argv=None):
                 exclude=args.exclude, pause=args.pause, gentle=args.gentle,
                 workday=args.workday,
             )
+        if args.command == "summarise":
+            return summarise_mod.summarise(con, like=args.like, limit=args.limit,
+                                           exclude=args.exclude, dry_run=args.dry_run)
         if args.command == "search":
             return search_mod.search(con, " ".join(args.query), limit=args.limit, any_word=args.any)
         if args.command == "grep":

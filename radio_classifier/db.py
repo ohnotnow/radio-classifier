@@ -38,6 +38,37 @@ CREATE TABLE IF NOT EXISTS segments (
 );
 CREATE INDEX IF NOT EXISTS idx_segments_file ON segments(file_id, start);
 
+-- One row per story (for now: per folder), written by `summarise`. cast_list is JSON [{actor, role}].
+CREATE TABLE IF NOT EXISTS stories (
+    id INTEGER PRIMARY KEY,
+    folder TEXT UNIQUE NOT NULL,
+    kind TEXT,
+    kind_reason TEXT,
+    title TEXT,
+    writer TEXT,
+    cast_list TEXT,
+    synopsis TEXT,
+    model TEXT,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS story_files (
+    file_id INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    story_id INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    episode INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_story_files_story ON story_files(story_id, episode);
+
+-- Per-episode summaries: full of spoilers, so keep them out of search results and browsing.
+CREATE TABLE IF NOT EXISTS summaries (
+    file_id INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    model TEXT,
+    text TEXT,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     text, path, artist, album, title,
     tokenize = 'porter unicode61'
@@ -73,3 +104,5 @@ def forget_file(con, file_id):
     con.execute("DELETE FROM segments WHERE file_id = ?", (file_id,))
     con.execute("DELETE FROM search_index WHERE rowid = ?", (file_id,))
     con.execute("DELETE FROM transcripts WHERE file_id = ?", (file_id,))
+    con.execute("DELETE FROM summaries WHERE file_id = ?", (file_id,))
+    con.execute("DELETE FROM story_files WHERE file_id = ?", (file_id,))
