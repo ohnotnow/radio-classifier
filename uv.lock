@@ -2022,6 +2022,7 @@ dependencies = [
     { name = "litellm" },
     { name = "mutagen" },
     { name = "parakeet-mlx" },
+    { name = "python-dotenv" },
 ]
 
 [package.metadata]
@@ -2029,6 +2030,7 @@ requires-dist = [
     { name = "litellm", specifier = ">=1.103.2" },
     { name = "mutagen", specifier = ">=1.48.1" },
     { name = "parakeet-mlx", specifier = ">=0.5.2" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
 ]
 
 [[package]]

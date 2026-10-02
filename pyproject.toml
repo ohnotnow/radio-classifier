@@ -8,4 +8,5 @@ dependencies = [
     "litellm>=1.103.2",
     "mutagen>=1.48.1",
     "parakeet-mlx>=0.5.2",
+    "python-dotenv>=1.2.4",
 ]
