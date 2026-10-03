@@ -16,7 +16,9 @@ Then `search` finds things by what was said in them. An actor's name, a title fr
 
 Once the first pass is done you can go further and transcribe whole files (see below), which makes plot details from anywhere in a serial searchable and records a timestamp for every sentence.
 
-Everything runs locally, apart from a one-time model download from Hugging Face (about 2.5GB).
+Finally, `summarise` can hand the transcripts to an LLM to write a Radio Times style listing for each story (title, writer, cast, synopsis) and a short summary of every episode.
+
+Everything up to `summarise` runs locally, apart from a one-time model download from Hugging Face (about 2.5GB). `summarise` is optional and uses a cloud LLM API.
 
 ## Prerequisites
 
@@ -24,6 +26,7 @@ Everything runs locally, apart from a one-time model download from Hugging Face 
 - [uv](https://docs.astral.sh/uv/)
 - ffmpeg (`brew install ffmpeg`)
 - Python 3.11+ (uv will handle this for you)
+- For `summarise` only: an API key for an LLM provider that [litellm](https://docs.litellm.ai/) supports
 
 ## Getting started
 
@@ -77,6 +80,30 @@ Whole files are processed in 180 second chunks, so memory stays under 4GB whatev
 
 If you want manual control over the transcription schedule, `--gentle` forces CPU-only mode and `--pause N` sleeps N seconds between files. Running the whole thing under `taskpolicy -c background` makes it politer still.
 
+## Story listings and episode summaries
+
+`summarise` groups transcribed files into stories and asks an LLM about each one. For now a story is a folder holding either a single file or a numbered run of files with the same name (`Down Payment On Death 1_5.mp3` to `5_5.mp3`); folders of differently named files are left alone.
+
+Each story gets one call to write a listing: what kind of programme it is (drama, reading, panel show, discussion, documentary, music), the title, writer, cast with their roles, and a two or three sentence synopsis that doesn't give away the ending. Dramas and readings then get a four to six sentence summary of every episode, written from the whole transcript, so you can find your place in a serial or track down the scene you half-remember. The episode summaries are full of spoilers; the synopsis isn't.
+
+Set the two models in a `.env` file in the project directory, using litellm model names, along with the provider's API key:
+
+```sh
+SYNOPSIS_MODEL=openai/gpt-6.1-sol
+SUMMARY_MODEL=openai/gpt-6-luna
+OPENAI_API_KEY=...
+```
+
+The story call is short and benefits from a stronger model; the episode calls read whole transcripts, so a cheap model keeps the bill down. With the two models above, 1,307 stories and 3,466 episode summaries cost about $6 and took just under seven hours.
+
+```sh
+uv run python -m radio_classifier summarise --dry-run   # list the stories, no LLM calls
+uv run python -m radio_classifier summarise --limit 5   # try a few first
+uv run python -m radio_classifier summarise
+```
+
+Like `transcribe`, it saves after every call and skips anything already done, so it can be stopped and restarted. The results are in the `stories` and `summaries` tables in `radio.db`; `search` and `show` don't display them yet.
+
 ## Commands
 
 | Command | Purpose |
@@ -84,6 +111,7 @@ If you want manual control over the transcription schedule, `--gentle` forces CP
 | `scan ROOT` | Walk a directory tree and record audio metadata. Incremental; prunes files that have gone. |
 | `classify` | Score every file: likely / maybe / unlikely drama. |
 | `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip shows you don't need indexed, `--model` to use a different Parakeet model (e.g. `mlx-community/parakeet-tdt-0.6b-v3` for multilingual audio), plus `--workday`, `--gentle`, `--pause`. |
+| `summarise` | LLM listing per story, and a summary per drama or reading episode. `--like PATTERN` (SQL LIKE on paths), `--limit N`, `--exclude REGEX` (repeatable), `--dry-run`. |
 | `search QUERY` | Full-text search over transcripts, paths and tags, with the time of the first matching sentence where known. `--any` matches any word instead of all. |
 | `grep PATTERN` | Case-insensitive regex over paths and tags. Works before anything is transcribed. |
 | `show ID` | One file's metadata, verdict, score reasons and transcript. |
