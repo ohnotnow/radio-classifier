@@ -34,13 +34,19 @@ def is_later_part(basename):
     return False
 
 
-def clip_to_wav(src, seconds, wav_path):
-    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", src]
+def clip_to_wav(src, seconds, wav_path, force_format=None):
+    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y"]
+    if force_format:
+        cmd += ["-f", force_format]
+    cmd += ["-i", src]
     if seconds > 0:
         cmd += ["-t", str(seconds)]
     cmd += ["-ac", "1", "-ar", "16000", "-acodec", "pcm_s16le", wav_path]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
+        # Some MP3s carry a RIFF header ("invalid start code ID3 in RIFF header"); naming the format works.
+        if not force_format and src.lower().endswith(".mp3"):
+            return clip_to_wav(src, seconds, wav_path, force_format="mp3")
         raise RuntimeError(f"ffmpeg: {proc.stderr.strip()[:300]}")
 
 
@@ -72,7 +78,8 @@ def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
             return False
         done = row["done_seconds"]
         want = seconds if seconds > 0 else (row["duration"] or 1e9)
-        return done > 0 and done < want and (row["duration"] or 0) > done + 30
+        # A second's slack for rounding; a wider margin left 181-210s files stuck at 180s.
+        return done > 0 and done < want and (row["duration"] or 0) > done + 1
 
     rows = [r for r in rows if wanted(r)]
     rows.sort(
