@@ -53,8 +53,8 @@ def main(argv=None):
     p.add_argument("pattern")
     p.add_argument("--limit", type=int, default=50)
 
-    p = sub.add_parser("show", help="Show one file's metadata, verdict and transcript")
-    p.add_argument("id", type=int)
+    p = sub.add_parser("show", help="Show one file (ID) or one story (sID, e.g. s412)")
+    p.add_argument("id", help="a file id, or s plus a story id")
 
     p = sub.add_parser("export", help="Print one file's transcript as SRT subtitles")
     p.add_argument("id", type=int)

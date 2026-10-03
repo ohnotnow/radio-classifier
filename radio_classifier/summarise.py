@@ -142,7 +142,7 @@ def make_llm(model, totals):
 
 
 def cast_line(cast):
-    return "; ".join(f"{c['actor']} as {c['role']}" if c.get("role") else c["actor"] for c in cast) or "not known"
+    return "; ".join(f"{c['actor']} as {c['role']}" if c.get("role") else c["actor"] for c in cast)
 
 
 def describe_story(con, ask, model, folder, files):
@@ -179,7 +179,7 @@ def describe_story(con, ask, model, folder, files):
 def summarise_episode(con, ask, model, story, n, total, file_row):
     prompt = EPISODE_PROMPT.format(
         title=story["title"] or "untitled", kind=story["kind"], synopsis=story["synopsis"] or "",
-        cast=cast_line(json.loads(story["cast_list"] or "[]")), n=n, total=total, text=file_row["text"],
+        cast=cast_line(json.loads(story["cast_list"] or "[]")) or "not known", n=n, total=total, text=file_row["text"],
     )
     try:
         text, error = ask(prompt)["summary"], None

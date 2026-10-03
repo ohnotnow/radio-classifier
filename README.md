@@ -102,7 +102,18 @@ uv run python -m radio_classifier summarise --limit 5   # try a few first
 uv run python -m radio_classifier summarise
 ```
 
-Like `transcribe`, it saves after every call and skips anything already done, so it can be stopped and restarted. The results are in the `stories` and `summaries` tables in `radio.db`; `search` and `show` don't display them yet.
+Like `transcribe`, it saves after every call and skips anything already done, so it can be stopped and restarted.
+
+Once stories exist, `search` lists each matching story once, with its listing and the episodes that matched, rather than one result per file. A story can match on its title, writer, cast or synopsis as well as on its transcripts, which helps when the credits weren't transcribed or the speech recogniser misheard a name. Files that aren't part of a story are listed as before.
+
+```
+[s781] Down Payment on Death (drama, 5 episodes), by Jim Eldridge, adapted from his own novel
+      with Dinsdale Landen as Arthur J. Gorder; Glyn Owen as Charles Allweather; Basil Henson as Leon Young
+      Sick of killing for the British Secret Service, Art Gorder resigns and retreats to his flat, ...
+      ep 2 [35146] 11:22: What about the shop?
+```
+
+`show s781` gives the full listing and every episode with its summary. `show 35146` on an episode adds the story and that episode's summary above the transcript. The synopsis is safe to read; the episode summaries give the plot away, which is why search results only show the synopsis.
 
 ## Commands
 
@@ -112,9 +123,9 @@ Like `transcribe`, it saves after every call and skips anything already done, so
 | `classify` | Score every file: likely / maybe / unlikely drama. |
 | `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip shows you don't need indexed, `--model` to use a different Parakeet model (e.g. `mlx-community/parakeet-tdt-0.6b-v3` for multilingual audio), plus `--workday`, `--gentle`, `--pause`. |
 | `summarise` | LLM listing per story, and a summary per drama or reading episode. `--like PATTERN` (SQL LIKE on paths), `--limit N`, `--exclude REGEX` (repeatable), `--dry-run`. |
-| `search QUERY` | Full-text search over transcripts, paths and tags, with the time of the first matching sentence where known. `--any` matches any word instead of all. |
+| `search QUERY` | Full-text search over transcripts, paths, tags and story listings, grouping episodes under their story, with the time of the first matching sentence where known. `--any` matches any word instead of all. |
 | `grep PATTERN` | Case-insensitive regex over paths and tags. Works before anything is transcribed. |
-| `show ID` | One file's metadata, verdict, score reasons and transcript. |
+| `show ID` | One file's metadata, verdict, score reasons, story and episode summary, and transcript. `show sID` shows a story and all its episode summaries. |
 | `export ID` | A transcript as SRT subtitles. `--plain` for text only. |
 | `stats` | Collection totals and transcription progress. |
 
