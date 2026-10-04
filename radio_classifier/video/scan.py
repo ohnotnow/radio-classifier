@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import subprocess
 import time
 
@@ -38,18 +39,40 @@ def probe(path):
     return float(duration) if duration else None, language, stream, None
 
 
-def scan(con, root):
+UNDER = "substr(path, 1, length(?)) = ?"  # exact prefix: LIKE would treat _ and % in folder names as wildcards
+
+
+def rows_under(con, root, columns="id, path, size, mtime"):
+    prefix = root + os.sep
+    return con.execute(f"SELECT {columns} FROM files WHERE {UNDER}", (prefix, prefix)).fetchall()
+
+
+def remounted_from(con, root, found):
+    """The old root, if these look like videos already scanned elsewhere (same name, size and mtime)."""
+    sample = sorted(path for path, _ in found)[:rules.REMOUNT_SAMPLE]
+    matches = []
+    for path in sample:
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        for row in con.execute("SELECT path, mtime FROM files WHERE path LIKE ? ESCAPE '\\' AND size = ?",
+                               ("%" + os.sep + like_escape(os.path.basename(path)), st.st_size)):
+            if abs(row["mtime"] - st.st_mtime) < 1:
+                matches.append((path, row["path"]))
+    return rules.guess_old_root(root, matches, len(sample))
+
+
+def like_escape(text):
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def scan(con, root, new_root=False):
     root = os.path.abspath(root)
     if not os.path.isdir(root):
         print(f"Not a directory: {root}")
         return 2
-    existing = {
-        row["path"]: (row["size"], row["mtime"], row["id"])
-        for row in con.execute(
-            "SELECT id, path, size, mtime FROM files WHERE path LIKE ?",
-            (root + os.sep + "%",),
-        )
-    }
+    existing = {row["path"]: (row["size"], row["mtime"], row["id"]) for row in rows_under(con, root)}
 
     print(f"Listing videos under {root} ...", flush=True)
     found = list(find_videos(root))
@@ -58,6 +81,18 @@ def scan(con, root):
         print(f"Found no videos, but the database has {len(existing)} under {root} (share not mounted?). "
               "Nothing pruned.")
         return 1
+    if found and not existing and not new_root:
+        # macOS mounts a share at /Volumes/ssd-1 when a stale /Volumes/ssd is still there: without this, the
+        # whole collection would be added again with no transcripts.
+        guess = remounted_from(con, root, found)
+        if guess:
+            old_root, n = guess
+            sampled = min(len(found), rules.REMOUNT_SAMPLE)
+            print(f"These look like videos already scanned from {old_root} ({n} of the first {sampled} match).\n"
+                  "If your share has come back under a new name, keep everything already done with:\n"
+                  f"    video remount {shlex.quote(old_root)} {shlex.quote(root)}\n"
+                  "To scan this as a separate collection anyway, add --new-root.")
+            return 1
     print(f"Found {len(found)} videos; probing new and changed files ...", flush=True)
 
     added = updated = unchanged = errors = 0
@@ -125,4 +160,31 @@ def scan(con, root):
         f"{pruned} pruned, {errors} unreadable.",
         flush=True,
     )
+    return 0
+
+
+def remount(con, old, new):
+    """Move stored paths from one mount point to another, keeping transcripts and summaries."""
+    old, new = os.path.abspath(old), os.path.abspath(new)
+    if not os.path.isdir(new):
+        print(f"Not a directory: {new}")
+        return 2
+    rows = rows_under(con, old, "id, path")
+    if not rows:
+        print(f"Nothing stored under {old}.")
+        return 2
+    moved = [(new + row["path"][len(old):], row["id"]) for row in rows]
+    for path, _ in moved:
+        if con.execute("SELECT 1 FROM files WHERE path = ?", (path,)).fetchone():
+            print(f"{path} is already in the database, so {new} has been scanned before. Nothing moved.")
+            return 2
+    with con:
+        con.executemany("UPDATE files SET path = ? WHERE id = ?", moved)
+        con.executemany("UPDATE search_index SET path = ? WHERE rowid = ?", moved)
+        con.execute(
+            "UPDATE video_files SET sidecar_srt = ? || substr(sidecar_srt, length(?) + 1) "
+            f"WHERE {UNDER.replace('path', 'sidecar_srt')}",
+            (new, old, old + os.sep, old + os.sep),
+        )
+    print(f"Moved {len(moved)} files from {old} to {new}.")
     return 0

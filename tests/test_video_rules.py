@@ -8,7 +8,7 @@ from radio_classifier.video import rules
 
 CASES = json.loads((Path(__file__).parent / "fixtures" / "video_rules.json").read_text())
 SIMPLE = ["match_sidecar", "parse_srt", "is_dialogue", "is_close", "language_from_tag", "decide_language",
-          "coerce_summary", "check_vocab"]
+          "coerce_summary", "check_vocab", "guess_old_root"]
 
 
 def plain(value):

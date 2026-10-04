@@ -76,6 +76,12 @@ def main(argv=None):
     video = p.add_subparsers(dest="video_command", required=True)
     v = video.add_parser("scan", help="Walk a mounted share and record each video's duration, language and subtitles")
     v.add_argument("root")
+    v.add_argument("--new-root", action="store_true",
+                   help="Scan as a separate collection even if the videos look like ones already scanned elsewhere")
+    v = video.add_parser("remount", help="A share came back under a new mount point: move the stored paths, "
+                                          "keeping transcripts and summaries")
+    v.add_argument("old")
+    v.add_argument("new")
     v = video.add_parser("transcribe", help="Whole-file text for each video: subtitles, else speech-to-text")
     v.add_argument("--limit", type=int, help="Stop after N files")
     v.add_argument("--exclude", action="append", default=[], metavar="REGEX",
@@ -102,10 +108,12 @@ def main(argv=None):
 
         con = connect_video(db_path)
         try:
-            if args.video_command == "scan":
+            if args.video_command in ("scan", "remount"):
                 from .video import scan as video_scan
 
-                return video_scan.scan(con, args.root)
+                if args.video_command == "scan":
+                    return video_scan.scan(con, args.root, new_root=args.new_root)
+                return video_scan.remount(con, args.old, args.new)
             print(f"video {args.video_command}: not implemented yet")
             return 2
         finally:

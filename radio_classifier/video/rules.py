@@ -127,3 +127,25 @@ def check_vocab(genres, subgenres, vocab):
     kept_subs = [s for s in subgenres if s in subs]
     off_list = [g for g in genres if g not in groups] + [s for s in subgenres if s not in subs]
     return kept_genres, kept_subs, off_list
+
+
+REMOUNT_SAMPLE = 20  # files looked at when a scan is given a root it has never seen
+REMOUNT_MIN_MATCHES = 3
+
+
+def guess_old_root(root, matches, sampled):
+    """Where an apparently new share was scanned before. matches: (path under root, existing path) pairs for
+    files whose name, size and mtime match an existing row; sampled: how many files were looked at.
+    Returns (old root, files voting for it), or None unless at least half the sample (and 3) agree."""
+    votes = {}
+    for path, existing in matches:
+        rel = os.path.relpath(path, root)
+        suffix = os.sep + rel
+        if existing.endswith(suffix) and existing[: -len(suffix)] != root:
+            votes.setdefault(existing[: -len(suffix)], set()).add(path)
+    if not votes:
+        return None
+    old_root, voters = max(votes.items(), key=lambda kv: len(kv[1]))
+    if len(voters) >= REMOUNT_MIN_MATCHES and 2 * len(voters) >= sampled:
+        return old_root, len(voters)
+    return None

@@ -146,6 +146,7 @@ Once stories exist, `search` lists each matching story once, with its listing an
 | `export ID` | A transcript as SRT subtitles. `--plain` for text only. |
 | `stats` | Collection totals and transcription progress. |
 | `video scan ROOT`, `video transcribe`, `video summarise` | The same idea for a video collection, in its own database (`video.db` by default; video commands refuse a radio database). In progress. |
+| `video remount OLD NEW` | A share came back under a new mount point (macOS gives you `/Volumes/ssd-1` when a stale `/Volumes/ssd` is still there): move the stored paths, keeping transcripts and summaries. `video scan` spots this case and tells you the exact command; `--new-root` scans as a separate collection instead. |
 
 ## How the classifier decides
 

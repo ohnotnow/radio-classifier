@@ -3,120 +3,734 @@
   "match_sidecar": [
     {
       "note": "English preferred over Danish",
-      "args": ["/v/Red Election S01E03 576p.mp4", ["/v/Red Election S01E03 576p.da.srt", "/v/Red Election S01E03 576p.en.srt"]],
+      "args": [
+        "/v/Red Election S01E03 576p.mp4",
+        [
+          "/v/Red Election S01E03 576p.da.srt",
+          "/v/Red Election S01E03 576p.en.srt"
+        ]
+      ],
       "expected": "/v/Red Election S01E03 576p.en.srt"
     },
     {
       "note": "plain same stem",
-      "args": ["/v/Vera S13E03 (21 Jan 2024).mp4", ["/v/Vera S13E03 (21 Jan 2024).srt"]],
+      "args": [
+        "/v/Vera S13E03 (21 Jan 2024).mp4",
+        [
+          "/v/Vera S13E03 (21 Jan 2024).srt"
+        ]
+      ],
       "expected": "/v/Vera S13E03 (21 Jan 2024).srt"
     },
     {
       "note": "plain stem beats a language suffix",
-      "args": ["/v/X.mkv", ["/v/X.en.srt", "/v/X.srt"]],
+      "args": [
+        "/v/X.mkv",
+        [
+          "/v/X.en.srt",
+          "/v/X.srt"
+        ]
+      ],
       "expected": "/v/X.srt"
     },
     {
       "note": "stem differs ([HI] variant): a known, accepted miss",
-      "args": ["/v/The Good Ship Murder Christmas Special (18 Dec 2024) [1080p mp4 subs HI].mp4", ["/v/The Good Ship Murder Christmas Special (18 Dec 2024) [1080p] [HI].srt"]],
+      "args": [
+        "/v/The Good Ship Murder Christmas Special (18 Dec 2024) [1080p mp4 subs HI].mp4",
+        [
+          "/v/The Good Ship Murder Christmas Special (18 Dec 2024) [1080p] [HI].srt"
+        ]
+      ],
       "expected": null
     },
     {
       "note": "only a non-English sidecar",
-      "args": ["/v/X.avi", ["/v/X.da.srt"]],
+      "args": [
+        "/v/X.avi",
+        [
+          "/v/X.da.srt"
+        ]
+      ],
       "expected": "/v/X.da.srt"
     },
     {
       "note": "case-insensitive, with a flag suffix",
-      "args": ["/v/Code 37.AVI", ["/v/code 37.eng.forced.srt"]],
+      "args": [
+        "/v/Code 37.AVI",
+        [
+          "/v/code 37.eng.forced.srt"
+        ]
+      ],
       "expected": "/v/code 37.eng.forced.srt"
     },
     {
       "note": "a different episode is not a sidecar",
-      "args": ["/v/C37_S03E04.avi", ["/v/C37_S03E04b.srt", "/v/C37_S03E05.srt"]],
+      "args": [
+        "/v/C37_S03E04.avi",
+        [
+          "/v/C37_S03E04b.srt",
+          "/v/C37_S03E05.srt"
+        ]
+      ],
       "expected": null
     }
   ],
   "parse_srt": [
     {
       "note": "two lines, a font tag, a cue number that must not leak",
-      "args": ["1\n00:00:05,040 --> 00:00:07,720\n<font face=\"Serif\" size=\"18\">This programme contains\nscenes of graphic violence</font>\n\n2\n00:02:19,560 --> 00:02:21,200\n<font face=\"Serif\" size=\"18\">PHONE RINGS</font>\n"],
-      "expected": [[5.04, 7.72, "This programme contains scenes of graphic violence"], [139.56, 141.2, "PHONE RINGS"]]
+      "args": [
+        "1\n00:00:05,040 --> 00:00:07,720\n<font face=\"Serif\" size=\"18\">This programme contains\nscenes of graphic violence</font>\n\n2\n00:02:19,560 --> 00:02:21,200\n<font face=\"Serif\" size=\"18\">PHONE RINGS</font>\n"
+      ],
+      "expected": [
+        [
+          5.04,
+          7.72,
+          "This programme contains scenes of graphic violence"
+        ],
+        [
+          139.56,
+          141.2,
+          "PHONE RINGS"
+        ]
+      ]
     },
     {
       "note": "italics and colour tags, CRLF line ends",
-      "args": ["7\r\n01:02:03,500 --> 01:02:05,000\r\n<i>Well, it's rather delicate</i>\r\n\r\n8\r\n01:02:05,100 --> 01:02:06,000\r\n<font color=\"yellow\">Kenny's trying to contact him,</font>\r\n"],
-      "expected": [[3723.5, 3725.0, "Well, it's rather delicate"], [3725.1, 3726.0, "Kenny's trying to contact him,"]]
+      "args": [
+        "7\r\n01:02:03,500 --> 01:02:05,000\r\n<i>Well, it's rather delicate</i>\r\n\r\n8\r\n01:02:05,100 --> 01:02:06,000\r\n<font color=\"yellow\">Kenny's trying to contact him,</font>\r\n"
+      ],
+      "expected": [
+        [
+          3723.5,
+          3725.0,
+          "Well, it's rather delicate"
+        ],
+        [
+          3725.1,
+          3726.0,
+          "Kenny's trying to contact him,"
+        ]
+      ]
     },
     {
       "note": "dot before milliseconds; an empty cue is dropped",
-      "args": ["1\n00:00:01.000 --> 00:00:02.500\nHello\n\n2\n00:00:03.000 --> 00:00:04.000\n<i></i>\n"],
-      "expected": [[1.0, 2.5, "Hello"]]
+      "args": [
+        "1\n00:00:01.000 --> 00:00:02.500\nHello\n\n2\n00:00:03.000 --> 00:00:04.000\n<i></i>\n"
+      ],
+      "expected": [
+        [
+          1.0,
+          2.5,
+          "Hello"
+        ]
+      ]
     }
   ],
   "is_dialogue": [
-    {"note": "Astrid embedded track: sound effects only", "args": [56, 3180], "expected": false},
-    {"note": "Code 37 subtitles", "args": [546, 3267], "expected": true},
-    {"note": "Red Election subtitles", "args": [581, 2630], "expected": true},
-    {"note": "unknown duration", "args": [500, 0], "expected": false},
-    {"note": "missing duration", "args": [500, null], "expected": false}
+    {
+      "note": "Astrid embedded track: sound effects only",
+      "args": [
+        56,
+        3180
+      ],
+      "expected": false
+    },
+    {
+      "note": "Code 37 subtitles",
+      "args": [
+        546,
+        3267
+      ],
+      "expected": true
+    },
+    {
+      "note": "Red Election subtitles",
+      "args": [
+        581,
+        2630
+      ],
+      "expected": true
+    },
+    {
+      "note": "unknown duration",
+      "args": [
+        500,
+        0
+      ],
+      "expected": false
+    },
+    {
+      "note": "missing duration",
+      "args": [
+        500,
+        null
+      ],
+      "expected": false
+    }
   ],
   "vote": [
-    {"lang": "nl", "args": ["Dat is ook bij niet, zegt u dat niet, waarom niks, en die hoer zegt: we gaan verwachten 5 euro, die was het te"], "winner": "nl", "scores": {"nl": 8, "en": 3, "de": 3}},
-    {"lang": "sv", "args": ["Vänar med det. Jag var hemma hos det. Det är då man köar och sin datar är lite kläder, foton på vägna, samma f"], "winner": "sv", "scores": {"sv": 9, "da": 5, "en": 0}},
-    {"lang": "it", "args": ["suo cugino. Ma in quella villa non c'è stato nessun furto. E come hanno fatto i ladri a impadronirsi delle chi"], "winner": "it", "scores": {"it": 3, "en": 0}},
-    {"lang": "fr", "args": ["Mais je n'ai pas le droit. Cela dit, nous avons tous signé un accord stipulant que ce qui se disait ici ne dev"], "winner": "fr", "scores": {"fr": 8, "es": 3, "it": 2}},
-    {"lang": "fr, v3 code-switching into English: en wins narrowly", "args": ["Donc we've retrouved the poison on the verse. D'accord. Parce que si on avait dans le verre but in the bouteille, so that signifie que le poison is versé directement in the ver."], "winner": "en", "scores": {"en": 8, "fr": 6}, "close": true},
-    {"lang": "en", "args": ["Sorry, my grand. When will he get here? Tomorrow morning. What can I do for you, Inspector? Do you recognize t"], "winner": "en", "scores": {"en": 5}, "close": false},
-    {"lang": "en", "args": ["What are you doing? Put that down. You're jeopardizing op security. I'm not an idiot. I wasn't followed here. "], "winner": "en", "scores": {"en": 6, "nl": 1}, "close": false},
-    {"lang": "en", "args": ["Why does he drink so much? I don't know. Fleet Street, I suppose. They all do. Is he a journalist? By the time"], "winner": "en", "scores": {"en": 5, "nl": 1}, "close": false}
+    {
+      "lang": "nl",
+      "args": [
+        "Dat is ook bij niet, zegt u dat niet, waarom niks, en die hoer zegt: we gaan verwachten 5 euro, die was het te"
+      ],
+      "winner": "nl",
+      "scores": {
+        "nl": 8,
+        "en": 3,
+        "de": 3
+      }
+    },
+    {
+      "lang": "sv",
+      "args": [
+        "Vänar med det. Jag var hemma hos det. Det är då man köar och sin datar är lite kläder, foton på vägna, samma f"
+      ],
+      "winner": "sv",
+      "scores": {
+        "sv": 9,
+        "da": 5,
+        "en": 0
+      }
+    },
+    {
+      "lang": "it",
+      "args": [
+        "suo cugino. Ma in quella villa non c'è stato nessun furto. E come hanno fatto i ladri a impadronirsi delle chi"
+      ],
+      "winner": "it",
+      "scores": {
+        "it": 3,
+        "en": 0
+      }
+    },
+    {
+      "lang": "fr",
+      "args": [
+        "Mais je n'ai pas le droit. Cela dit, nous avons tous signé un accord stipulant que ce qui se disait ici ne dev"
+      ],
+      "winner": "fr",
+      "scores": {
+        "fr": 8,
+        "es": 3,
+        "it": 2
+      }
+    },
+    {
+      "lang": "fr, v3 code-switching into English: en wins narrowly",
+      "args": [
+        "Donc we've retrouved the poison on the verse. D'accord. Parce que si on avait dans le verre but in the bouteille, so that signifie que le poison is versé directement in the ver."
+      ],
+      "winner": "en",
+      "scores": {
+        "en": 8,
+        "fr": 6
+      },
+      "close": true
+    },
+    {
+      "lang": "en",
+      "args": [
+        "Sorry, my grand. When will he get here? Tomorrow morning. What can I do for you, Inspector? Do you recognize t"
+      ],
+      "winner": "en",
+      "scores": {
+        "en": 5
+      },
+      "close": false
+    },
+    {
+      "lang": "en",
+      "args": [
+        "What are you doing? Put that down. You're jeopardizing op security. I'm not an idiot. I wasn't followed here. "
+      ],
+      "winner": "en",
+      "scores": {
+        "en": 6,
+        "nl": 1
+      },
+      "close": false
+    },
+    {
+      "lang": "en",
+      "args": [
+        "Why does he drink so much? I don't know. Fleet Street, I suppose. They all do. Is he a journalist? By the time"
+      ],
+      "winner": "en",
+      "scores": {
+        "en": 5,
+        "nl": 1
+      },
+      "close": false
+    }
   ],
   "is_close": [
-    {"note": "Spiral probe", "args": [{"fr": 26, "en": 15}], "expected": true},
-    {"note": "Night Conspirators probe", "args": [{"en": 30, "es": 5}], "expected": false},
-    {"note": "exactly twice is not close", "args": [{"en": 10, "fr": 5}], "expected": false},
-    {"note": "tie", "args": [{"en": 4, "fr": 4}], "expected": true},
-    {"note": "nothing heard", "args": [{"en": 0, "fr": 0}], "expected": true}
+    {
+      "note": "Spiral probe",
+      "args": [
+        {
+          "fr": 26,
+          "en": 15
+        }
+      ],
+      "expected": true
+    },
+    {
+      "note": "Night Conspirators probe",
+      "args": [
+        {
+          "en": 30,
+          "es": 5
+        }
+      ],
+      "expected": false
+    },
+    {
+      "note": "exactly twice is not close",
+      "args": [
+        {
+          "en": 10,
+          "fr": 5
+        }
+      ],
+      "expected": false
+    },
+    {
+      "note": "tie",
+      "args": [
+        {
+          "en": 4,
+          "fr": 4
+        }
+      ],
+      "expected": true
+    },
+    {
+      "note": "nothing heard",
+      "args": [
+        {
+          "en": 0,
+          "fr": 0
+        }
+      ],
+      "expected": true
+    }
   ],
   "language_from_tag": [
-    {"args": ["eng"], "expected": "en"},
-    {"args": ["en"], "expected": "en"},
-    {"args": ["ENG"], "expected": "en"},
-    {"note": "Astrid S01E04", "args": ["fre"], "expected": "fre"},
-    {"args": ["dut"], "expected": "dut"},
-    {"note": "Tales of Unease", "args": ["und"], "expected": null},
-    {"note": "The Frighteners: no tag", "args": [""], "expected": null},
-    {"args": [null], "expected": null}
+    {
+      "args": [
+        "eng"
+      ],
+      "expected": "en"
+    },
+    {
+      "args": [
+        "en"
+      ],
+      "expected": "en"
+    },
+    {
+      "args": [
+        "ENG"
+      ],
+      "expected": "en"
+    },
+    {
+      "note": "Astrid S01E04",
+      "args": [
+        "fre"
+      ],
+      "expected": "fre"
+    },
+    {
+      "args": [
+        "dut"
+      ],
+      "expected": "dut"
+    },
+    {
+      "note": "Tales of Unease",
+      "args": [
+        "und"
+      ],
+      "expected": null
+    },
+    {
+      "note": "The Frighteners: no tag",
+      "args": [
+        ""
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        null
+      ],
+      "expected": null
+    }
   ],
   "decide_language": [
-    {"note": "Spiral", "args": [[{"fr": 26, "en": 15}]], "expected": "fr"},
-    {"note": "Night Conspirators", "args": [[{"en": 30, "es": 5}]], "expected": "en"},
-    {"note": "Still Waters", "args": [[{"en": 20, "fr": 5}]], "expected": "en"},
-    {"note": "close English first window, French second", "args": [[{"en": 8, "fr": 6}, {"fr": 20, "nl": 7}]], "expected": "fr"},
-    {"note": "two English windows", "args": [[{"en": 8, "fr": 6}, {"en": 25, "fr": 2}]], "expected": "en"},
-    {"note": "Beck", "args": [[{"sv": 44, "da": 25}]], "expected": "sv"}
+    {
+      "note": "Spiral",
+      "args": [
+        [
+          {
+            "fr": 26,
+            "en": 15
+          }
+        ]
+      ],
+      "expected": "fr"
+    },
+    {
+      "note": "Night Conspirators",
+      "args": [
+        [
+          {
+            "en": 30,
+            "es": 5
+          }
+        ]
+      ],
+      "expected": "en"
+    },
+    {
+      "note": "Still Waters",
+      "args": [
+        [
+          {
+            "en": 20,
+            "fr": 5
+          }
+        ]
+      ],
+      "expected": "en"
+    },
+    {
+      "note": "close English first window, French second",
+      "args": [
+        [
+          {
+            "en": 8,
+            "fr": 6
+          },
+          {
+            "fr": 20,
+            "nl": 7
+          }
+        ]
+      ],
+      "expected": "fr"
+    },
+    {
+      "note": "two English windows",
+      "args": [
+        [
+          {
+            "en": 8,
+            "fr": 6
+          },
+          {
+            "en": 25,
+            "fr": 2
+          }
+        ]
+      ],
+      "expected": "en"
+    },
+    {
+      "note": "Beck",
+      "args": [
+        [
+          {
+            "sv": 44,
+            "da": 25
+          }
+        ]
+      ],
+      "expected": "sv"
+    }
   ],
   "coerce_summary": [
-    {"args": ["  A summary.  "], "expected": "A summary."},
-    {"note": "No Place Like Earth, round 2", "args": [["Bert is stranded on Mars.", "He mends pots."]], "expected": "Bert is stranded on Mars. He mends pots."},
-    {"args": [null], "expected": null},
-    {"args": [42], "expected": "42"}
+    {
+      "args": [
+        "  A summary.  "
+      ],
+      "expected": "A summary."
+    },
+    {
+      "note": "No Place Like Earth, round 2",
+      "args": [
+        [
+          "Bert is stranded on Mars.",
+          "He mends pots."
+        ]
+      ],
+      "expected": "Bert is stranded on Mars. He mends pots."
+    },
+    {
+      "args": [
+        null
+      ],
+      "expected": null
+    },
+    {
+      "args": [
+        42
+      ],
+      "expected": "42"
+    }
   ],
   "check_vocab": [
     {
       "note": "all on the list",
-      "args": [["Drama", "Horror"], ["Uncanny", "Ghost Story"], {"Drama": ["Social Realism"], "Horror": ["Ghost Story", "Uncanny"]}],
-      "expected": [["Drama", "Horror"], ["Uncanny", "Ghost Story"], []]
+      "args": [
+        [
+          "Drama",
+          "Horror"
+        ],
+        [
+          "Uncanny",
+          "Ghost Story"
+        ],
+        {
+          "Drama": [
+            "Social Realism"
+          ],
+          "Horror": [
+            "Ghost Story",
+            "Uncanny"
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "Drama",
+          "Horror"
+        ],
+        [
+          "Uncanny",
+          "Ghost Story"
+        ],
+        []
+      ]
     },
     {
       "note": "invented and misplaced values are rejected, order kept",
-      "args": [["Drama", "Spooky", "Ghost Story"], ["Horror", "Social Realism", "Kitchen Sink"], {"Drama": ["Social Realism"], "Horror": ["Ghost Story", "Uncanny"]}],
-      "expected": [["Drama"], ["Social Realism"], ["Spooky", "Ghost Story", "Horror", "Kitchen Sink"]]
+      "args": [
+        [
+          "Drama",
+          "Spooky",
+          "Ghost Story"
+        ],
+        [
+          "Horror",
+          "Social Realism",
+          "Kitchen Sink"
+        ],
+        {
+          "Drama": [
+            "Social Realism"
+          ],
+          "Horror": [
+            "Ghost Story",
+            "Uncanny"
+          ]
+        }
+      ],
+      "expected": [
+        [
+          "Drama"
+        ],
+        [
+          "Social Realism"
+        ],
+        [
+          "Spooky",
+          "Ghost Story",
+          "Horror",
+          "Kitchen Sink"
+        ]
+      ]
     },
     {
       "note": "exact match only",
-      "args": [["drama"], ["uncanny"], {"Drama": ["Social Realism"], "Horror": ["Uncanny"]}],
-      "expected": [[], [], ["drama", "uncanny"]]
+      "args": [
+        [
+          "drama"
+        ],
+        [
+          "uncanny"
+        ],
+        {
+          "Drama": [
+            "Social Realism"
+          ],
+          "Horror": [
+            "Uncanny"
+          ]
+        }
+      ],
+      "expected": [
+        [],
+        [],
+        [
+          "drama",
+          "uncanny"
+        ]
+      ]
+    }
+  ],
+  "guess_old_root": [
+    {
+      "note": "same share under a new mount name: clear majority",
+      "args": [
+        "/Volumes/ssd-1",
+        [
+          [
+            "/Volumes/ssd-1/complete/a.mkv",
+            "/Volumes/ssd/complete/a.mkv"
+          ],
+          [
+            "/Volumes/ssd-1/complete/b.mkv",
+            "/Volumes/ssd/complete/b.mkv"
+          ],
+          [
+            "/Volumes/ssd-1/complete/c.mkv",
+            "/Volumes/ssd/complete/c.mkv"
+          ],
+          [
+            "/Volumes/ssd-1/complete/d.mkv",
+            "/Volumes/ssd/complete/d.mkv"
+          ]
+        ],
+        5
+      ],
+      "expected": [
+        "/Volumes/ssd",
+        4
+      ]
+    },
+    {
+      "note": "nested folders still give the same old root",
+      "args": [
+        "/Volumes/nas-2",
+        [
+          [
+            "/Volumes/nas-2/TV/Doomwatch/S1/e1.avi",
+            "/Volumes/nas/TV/Doomwatch/S1/e1.avi"
+          ],
+          [
+            "/Volumes/nas-2/TV/Doomwatch/S1/e2.avi",
+            "/Volumes/nas/TV/Doomwatch/S1/e2.avi"
+          ],
+          [
+            "/Volumes/nas-2/Films/x.mp4",
+            "/Volumes/nas/Films/x.mp4"
+          ]
+        ],
+        4
+      ],
+      "expected": [
+        "/Volumes/nas",
+        3
+      ]
+    },
+    {
+      "note": "fewer than half the sample match: a new collection that shares a few files",
+      "args": [
+        "/Volumes/new",
+        [
+          [
+            "/Volumes/new/a.mp4",
+            "/Volumes/old/a.mp4"
+          ],
+          [
+            "/Volumes/new/b.mp4",
+            "/Volumes/old/b.mp4"
+          ],
+          [
+            "/Volumes/new/c.mp4",
+            "/Volumes/old/c.mp4"
+          ]
+        ],
+        20
+      ],
+      "expected": null
+    },
+    {
+      "note": "fewer than 3 matches, even in a tiny sample",
+      "args": [
+        "/Volumes/new",
+        [
+          [
+            "/Volumes/new/a.mp4",
+            "/Volumes/old/a.mp4"
+          ],
+          [
+            "/Volumes/new/b.mp4",
+            "/Volumes/old/b.mp4"
+          ]
+        ],
+        2
+      ],
+      "expected": null
+    },
+    {
+      "note": "split votes: the bigger group must reach half on its own",
+      "args": [
+        "/Volumes/x",
+        [
+          [
+            "/Volumes/x/a.mp4",
+            "/Volumes/p/a.mp4"
+          ],
+          [
+            "/Volumes/x/b.mp4",
+            "/Volumes/p/b.mp4"
+          ],
+          [
+            "/Volumes/x/c.mp4",
+            "/Volumes/p/c.mp4"
+          ],
+          [
+            "/Volumes/x/d.mp4",
+            "/Volumes/q/d.mp4"
+          ],
+          [
+            "/Volumes/x/e.mp4",
+            "/Volumes/q/e.mp4"
+          ],
+          [
+            "/Volumes/x/f.mp4",
+            "/Volumes/q/f.mp4"
+          ]
+        ],
+        8
+      ],
+      "expected": null
+    },
+    {
+      "note": "a file copied to the same name in another folder doesn't count (path tails differ)",
+      "args": [
+        "/Volumes/x",
+        [
+          [
+            "/Volumes/x/a/one.mp4",
+            "/Volumes/y/b/one.mp4"
+          ],
+          [
+            "/Volumes/x/a/two.mp4",
+            "/Volumes/y/b/two.mp4"
+          ],
+          [
+            "/Volumes/x/a/three.mp4",
+            "/Volumes/y/b/three.mp4"
+          ]
+        ],
+        3
+      ],
+      "expected": null
     }
   ]
 }
