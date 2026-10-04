@@ -131,6 +131,35 @@ Once stories exist, `search` lists each matching story once, with its listing an
 
 `show s781` gives the full listing and every episode with its summary, with any copies listed under the episode they duplicate. `show 35146` on an episode adds the story and that episode's summary above the transcript. The synopsis is safe to read; the episode summaries give the plot away, which is why search results only show the synopsis.
 
+## Video
+
+The same idea works for a video collection: the half-remembered single play or anthology episode ("the one where the miners are trapped and someone talks about a spirit in the pit") is found from a summary of what happens in it. Video has its own database (`video.db` by default), and the video commands refuse to touch a radio one.
+
+Mount your shares read-only on the Mac (in Finder, or `mount_smbfs`), then point the tool at them. Nothing is installed on the NAS, and nothing is written to it.
+
+```sh
+uv run python -m radio_classifier video scan /Volumes/ssd/complete
+uv run python -m radio_classifier video transcribe --workday
+uv run python -m radio_classifier video summarise
+uv run python -m radio_classifier search --db video.db pit spirit
+uv run python -m radio_classifier search --db video.db --genre Thriller --decade 1970
+```
+
+- `video scan` records each video's duration, audio language tag and subtitles (a sidecar `.srt`, or a text subtitle track inside the file). About 8 files a second over Samba; later scans only look at new and changed files. If a share comes back under a new mount point (macOS gives you `/Volumes/ssd-1` when a stale `/Volumes/ssd` is still there), it says so and gives you the `video remount` command, so nothing is done twice.
+- `video transcribe` uses subtitles when there are enough of them to be dialogue (some tracks only caption sounds, "PHONE RINGS"), otherwise speech recognition on the whole file: Parakeet v2 for English, v3 for other languages. The language comes from the audio tag when the file has one, otherwise from a two-minute sample from the middle of the file. A 50-minute play takes 30 to 60 seconds over Samba, most of it on the GPU.
+- `video summarise` makes one call per video with `SUMMARY_MODEL`: title, series, the year it was made (and whether that came from the path, the dialogue or a guess), a summary, genres and subgenres, places, characters, set pieces and tone. Genres come from a fixed list in `radio_classifier/video/genres.json`: IMDb's genres and sub-genres, plus a few for things IMDb has no word for (Social Realism, Ghost Story, Uncanny, Twist in the Tale, Post-Apocalyptic, Eco-Thriller). About 6,000 to 9,000 tokens a video. The same play can land on a different, reasonable subgenre from one run to the next, so treat `--genre` as a way to browse, not a census.
+
+`search` on a video database matches your words against the summaries (and the transcripts), but the results only show what's safe to read before watching: title, series, year, genres, tone and places. Summaries, set pieces and character notes give endings away, so they only appear in `show ID`. `--genre NAME` (repeatable; genres and subgenres both count) and `--decade 1970` filter, and work without any search words.
+
+```
+[1422] The Black Goddess (Tales of Unease, 1970)
+      Drama, Horror / Uncanny | claustrophobic, ominous, fatalistic
+      places: District 7 coal pit; the tram road; the return
+      /Volumes/ssd/complete/Tales Of Unease - Series (1970) mp4/Tales of Unease Ep3 The Black Godess..mp4
+```
+
+What a summary can't hold is anything that's only shown on screen: an opening with no dialogue is invisible to it. Design and trial evidence: ant note racl-cwm6b.
+
 ## Commands
 
 | Command | Purpose |
@@ -140,12 +169,12 @@ Once stories exist, `search` lists each matching story once, with its listing an
 | `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--retry-failed` to try failed files again (a file that vanishes mid-run, such as a dropped network share, is never recorded as failed: the run stops after 5 in a row and a re-run picks them up), `--exclude REGEX` (repeatable) to skip more than the `exclude` list for this run, `--model` to use a different Parakeet model (e.g. `mlx-community/parakeet-tdt-0.6b-v3` for multilingual audio), plus `--workday`, `--gentle`, `--pause`. |
 | `summarise` | Group folders into stories, then an LLM listing per story and a summary per drama or reading episode. `--like PATTERN` (SQL LIKE on paths, picks folders), `--limit N`, `--exclude REGEX` (repeatable), `--dry-run`, `--group-only`. |
 | `exclude add PATTERN` | Never transcribe or summarise files whose path or tags match this regex; shows what it matches. `--note TEXT`. Also `exclude list` and `exclude remove ID`. |
-| `search QUERY` | Full-text search over transcripts, paths, tags and story listings, grouping episodes under their story, with the time of the first matching sentence where known. `--any` matches any word instead of all. |
+| `search QUERY` | Full-text search over transcripts, paths, tags and story listings, grouping episodes under their story, with the time of the first matching sentence where known. `--any` matches any word instead of all. On a video database it searches summaries too, shows only spoiler-safe fields, and takes `--genre NAME` (repeatable) and `--decade YEAR`. |
 | `grep PATTERN` | Case-insensitive regex over paths and tags. Works before anything is transcribed. |
 | `show ID` | One file's metadata, verdict, score reasons, story and episode summary, and transcript. `show sID` shows a story and all its episode summaries. |
 | `export ID` | A transcript as SRT subtitles. `--plain` for text only. |
 | `stats` | Collection totals and transcription progress. |
-| `video scan ROOT`, `video transcribe`, `video summarise` | The same idea for a video collection, in its own database (`video.db` by default; video commands refuse a radio database). In progress. |
+| `video scan ROOT`, `video transcribe`, `video summarise` | The same idea for a video collection, in its own database (`video.db` by default; video commands refuse a radio database). See [Video](#video). `video scan` takes `--new-root`; `video transcribe` takes `--limit`, `--retry-failed`, `--exclude`, `--workday`, `--gentle`, `--pause`; `video summarise` takes `--like`, `--limit`, `--exclude`. |
 | `video remount OLD NEW` | A share came back under a new mount point (macOS gives you `/Volumes/ssd-1` when a stale `/Volumes/ssd` is still there): move the stored paths, keeping transcripts and summaries. `video scan` spots this case and tells you the exact command; `--new-root` scans as a separate collection instead. |
 
 ## How the classifier decides

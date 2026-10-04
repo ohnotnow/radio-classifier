@@ -77,10 +77,125 @@ def build_story_index(con):
     )
 
 
-def search(con, query, limit=20, any_word=False):
+def is_video_db(con):
+    return con.execute("SELECT 1 FROM sqlite_master WHERE name = 'video_summaries'").fetchone() is not None
+
+
+def loads(text):
+    return json.loads(text) if text else []
+
+
+def build_video_index(con):
+    """Every video summary's fields in a TEMP FTS table, rebuilt per search like build_story_index."""
+    con.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS temp.video_index USING fts5("
+        "title, series, summary, places, characters, set_pieces, genres, tone, tokenize = 'porter unicode61')"
+    )
+    con.execute("DELETE FROM temp.video_index")
+    con.executemany(
+        "INSERT INTO temp.video_index (rowid, title, series, summary, places, characters, set_pieces, genres, tone) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [(s["file_id"], s["title"] or "", s["series"] or "", s["summary"] or "", " ".join(loads(s["places"])),
+          " ".join(f"{c.get('name', '')} {c.get('description', '')}" for c in loads(s["characters"])
+                   if isinstance(c, dict)),
+          " ".join(loads(s["set_pieces"])), " ".join(loads(s["genres"]) + loads(s["subgenres"])), s["tone"] or "")
+         for s in con.execute("SELECT * FROM video_summaries WHERE error IS NULL")],
+    )
+
+
+def video_card(s, path, missing=""):
+    """A summarised video in search results: spoiler-safe fields only. The summary, set pieces and
+    characters can give the ending away, so they are kept for `show` (owner's rule, racl-VqXmZ.6)."""
+    made = f", {s['made_year']}" if s["made_year"] else ""
+    heading = f"[{s['file_id']}] {s['title'] or os.path.basename(path)}"
+    heading += f" ({s['series']}{made})" if s["series"] else (f" ({s['made_year']})" if s["made_year"] else "")
+    lines = [wrapped(heading, first="")]
+    kinds = ", ".join(loads(s["genres"]))
+    subs = ", ".join(loads(s["subgenres"]))
+    tags = kinds + (f" / {subs}" if subs else "") + (f" | {s['tone']}" if s["tone"] else "")
+    if tags:
+        lines.append(wrapped(tags))
+    places = loads(s["places"])
+    if places:
+        lines.append(wrapped("places: " + "; ".join(places)))
+    lines.append(wrapped(path + missing))
+    return "\n".join(lines)
+
+
+def video_search(con, query, limit=20, any_word=False, genres=(), decade=None):
+    """Summaries are the search surface for video, but results show only spoiler-safe fields."""
+    summaries = {s["file_id"]: s for s in con.execute("SELECT * FROM video_summaries WHERE error IS NULL")}
+    wanted_genres = [g.lower() for g in genres]
+    filtering = bool(wanted_genres) or decade is not None
+    if not query and not filtering:
+        print("search needs a query, --genre or --decade")
+        return 2
+
+    def passes(s):
+        labels = {x.lower() for x in loads(s["genres"]) + loads(s["subgenres"])}
+        if any(g not in labels for g in wanted_genres):
+            return False
+        return decade is None or (s["made_year"] is not None and decade <= s["made_year"] <= decade + 9)
+
+    ranks = {}  # file_id -> best bm25 (lower is better)
+    snips = {}
+    if query:
+        match = quoted_query(query, any_word)
+        try:
+            build_video_index(con)
+            for rowid, rank in con.execute(
+                "SELECT rowid, bm25(video_index, 3.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0) "
+                "FROM temp.video_index WHERE video_index MATCH ?", (match,)):
+                ranks[rowid] = min(rank, ranks.get(rowid, rank))
+            for row in con.execute(
+                "SELECT rowid, snippet(search_index, 0, '>>', '<<', ' ... ', 16) AS snip, "
+                "bm25(search_index, 3.0, 1.0, 0.5, 0.5, 0.5) AS rank FROM search_index "
+                "WHERE search_index MATCH ? ORDER BY rank LIMIT ?", (match, FILE_HITS)):
+                ranks[row["rowid"]] = min(row["rank"], ranks.get(row["rowid"], row["rank"]))
+                snips[row["rowid"]] = row["snip"]
+        except sqlite3.OperationalError as exc:
+            print(f"Bad query: {exc}")
+            return 2
+        ids = sorted(ranks, key=ranks.get)
+    else:
+        ids = sorted(summaries, key=lambda i: (summaries[i]["made_year"] or 9999, (summaries[i]["title"] or "").lower()))
+    if filtering:
+        ids = [i for i in ids if i in summaries and passes(summaries[i])]
+    if not ids:
+        print("No matches.")
+        return 1
+
+    words = [w.lower() for w in (query or "").split()]
+    for n, file_id in enumerate(ids[:limit]):
+        if n:
+            print()
+        f = con.execute("SELECT id, path, duration, missing_since FROM files WHERE id = ?", (file_id,)).fetchone()
+        if file_id in summaries:
+            print(video_card(summaries[file_id], f["path"], missing_note(f)))
+            continue
+        print(wrapped(f"[{f['id']}] ({fmt_duration(f['duration'])}) {f['path']}{missing_note(f)}", first=""))
+        if snips.get(file_id):
+            print(wrapped(snips[file_id].strip()))
+        hit = first_hit(con, file_id, words)
+        if hit:
+            print(wrapped(f"first at {fmt_clock(hit['start'])}: {hit['text'][:100]}"))
+    if len(ids) > limit:
+        print(f"\n... and {len(ids) - limit} more (--limit)")
+    return 0
+
+
+def search(con, query, limit=20, any_word=False, genres=(), decade=None):
     """Stories first-class, loose files as before. A story matches on its listing or on any of its
     episodes' transcripts, and appears once; results are ordered by best bm25 (lower is better),
-    a story winning a tie with a file."""
+    a story winning a tie with a file. A video database goes to video_search."""
+    if is_video_db(con):
+        return video_search(con, query, limit, any_word, genres, decade)
+    if genres or decade is not None:
+        print("--genre and --decade need a video database (e.g. --db video.db)")
+        return 2
+    if not query:
+        print("search needs a query")
+        return 2
     match = quoted_query(query, any_word)
     try:
         file_hits = con.execute(
@@ -195,9 +310,12 @@ def show(con, ident):
     print(row["path"] + missing_note(row))
     if row["changed_at"]:
         print(f"  changed since transcribed (scan of {row['changed_at'][:10]}); the transcript is the earlier version's")
-    print(f"  duration: {fmt_duration(row['duration'])}  bitrate: {row['bitrate']}  channels: {row['channels']}")
-    print(f"  artist: {row['artist']}  album: {row['album']}  title: {row['title']}  genre: {row['genre']}")
-    print(f"  verdict: {row['verdict']} (score {row['score']}: {row['reasons']})")
+    if is_video_db(con):
+        show_video(con, row)
+    else:
+        print(f"  duration: {fmt_duration(row['duration'])}  bitrate: {row['bitrate']}  channels: {row['channels']}")
+        print(f"  artist: {row['artist']}  album: {row['album']}  title: {row['title']}  genre: {row['genre']}")
+        print(f"  verdict: {row['verdict']} (score {row['score']}: {row['reasons']})")
     story = con.execute(
         """
         SELECT s.*, sf.episode, (SELECT COUNT(DISTINCT episode) FROM story_files WHERE story_id = s.id) AS episodes
@@ -225,6 +343,42 @@ def show(con, ident):
         print()
         print(wrapped(t["text"], indent="  "))
     return 0
+
+
+def show_video(con, row):
+    """Everything about a video, spoilers included: `show` is the "I've opened it" view."""
+    print(f"  duration: {fmt_duration(row['duration'])}")
+    v = con.execute("SELECT * FROM video_files WHERE file_id = ?", (row["id"],)).fetchone()
+    if v and (v["language"] or v["language_basis"]):
+        print(f"  language: {v['language'] or '-'} (from {v['language_basis']})")
+    s = con.execute("SELECT * FROM video_summaries WHERE file_id = ?", (row["id"],)).fetchone()
+    if s is None:
+        return
+    if s["error"]:
+        print(f"  summary FAILED: {s['error']}")
+        return
+    print()
+    made = f"{s['made_year']} ({s['made_year_basis']})" if s["made_year"] else "?"
+    print(wrapped(f"{s['title'] or '?'}  series: {s['series'] or '-'}  made: {made}", indent="    ", first="  "))
+    subs = ", ".join(loads(s["subgenres"]))
+    print(wrapped(", ".join(loads(s["genres"])) + (f" / {subs}" if subs else ""), indent="    ", first="  "))
+    for label, value in (("tone", s["tone"]), ("set in", s["setting_era"]),
+                         ("places", "; ".join(loads(s["places"])))):
+        if value:
+            print(wrapped(f"{label}: {value}", indent="    ", first="  "))
+    characters = [c for c in loads(s["characters"]) if isinstance(c, dict)]
+    if characters:
+        print("  characters:")
+        for c in characters:
+            print(wrapped(f"{c.get('name')}: {c.get('description')}", indent="      ", first="    "))
+    pieces = loads(s["set_pieces"])
+    if pieces:
+        print("  set pieces:")
+        for piece in pieces:
+            print(wrapped(piece, indent="      ", first="    - "))
+    print()
+    print(wrapped(s["summary"] or "", indent="  "))
+    print()
 
 
 def show_story(con, story_id):

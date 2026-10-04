@@ -55,10 +55,13 @@ def main(argv=None):
     a = actions.add_parser("remove", help="Remove a pattern by id")
     a.add_argument("id", type=int)
 
-    p = sub.add_parser("search", help="Full-text search transcripts (and paths/tags)")
-    p.add_argument("query", nargs="+")
+    p = sub.add_parser("search", help="Full-text search transcripts (and paths/tags; summaries in a video database)")
+    p.add_argument("query", nargs="*")
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--any", action="store_true", help="Match any word instead of all words")
+    p.add_argument("--genre", action="append", default=[], metavar="NAME",
+                   help="Video database only: genre or subgenre that must match (repeatable: all must match)")
+    p.add_argument("--decade", type=int, metavar="YEAR", help="Video database only: made in this decade, e.g. 1970")
 
     p = sub.add_parser("grep", help="Regex search over paths and tags")
     p.add_argument("pattern")
@@ -156,7 +159,8 @@ def main(argv=None):
                 return excludes.list_all(con)
             return excludes.remove(con, args.id)
         if args.command == "search":
-            return search_mod.search(con, " ".join(args.query), limit=args.limit, any_word=args.any)
+            return search_mod.search(con, " ".join(args.query), limit=args.limit, any_word=args.any,
+                                     genres=args.genre, decade=args.decade)
         if args.command == "grep":
             return search_mod.grep(con, args.pattern, limit=args.limit)
         if args.command == "show":

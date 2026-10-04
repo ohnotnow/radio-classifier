@@ -20,10 +20,10 @@ Local CLI that finds radio dramas in a large, badly named audio collection by tr
 - `db.py`: schema (`files`, `transcripts`, `segments`, `stories`, `story_files`, `summaries`, `excludes`, FTS5 `search_index`) and write helpers.
 - `scan.py`, `classify.py`: metadata sweep and heuristic scoring.
 - `transcribe.py`: candidate selection (`pick_candidates`), ffmpeg clipping (`clip_to_wav`, with an optional `start` seek), ASR (`make_asr`), the per-file commit loop with `--workday` scheduling (`run_loop`, shared with `video transcribe`: radio's `transcribe` passes it a `process(row)` that clips and transcribes).
-- `video/`: the `video` commands. `db.py` (video-only tables, radio-database guard), `rules.py` (pure decisions, fixture-tested), `scan.py` (scan and `remount`), `transcribe.py` (subtitles, else v2 or v3 chosen by audio tag or a mid-file probe).
+- `video/`: the `video` commands. `db.py` (video-only tables, radio-database guard), `rules.py` (pure decisions, fixture-tested), `scan.py` (scan and `remount`), `transcribe.py` (subtitles, else v2 or v3 chosen by audio tag or a mid-file probe), `summarise.py` (the round 4 TV prompt, verbatim from racl-cwm6b; don't reword it without fresh trial evidence) and `genres.json` (the genre vocabulary).
 - `summarise.py`: grouping folders into stories (LLM for mixed folders, windows plus a merge pass for big ones), story listings, episode summaries. Design and trial evidence in ant note racl-mjBCN.
 - `excludes.py`: the `excludes` table of regexes that `transcribe` and `summarise` skip, and the path/tags haystack they and `grep` match against.
-- `search.py`: `search`, `grep`, `show`, `export`, `stats`.
+- `search.py`: `search`, `grep`, `show`, `export`, `stats`. On a video database (`video_summaries` exists) `search` goes to `video_search`: it matches summaries but prints only spoiler-safe fields (owner's rule: summaries, set pieces and characters appear only in `show`).
 
 ## Things learned the hard way
 
