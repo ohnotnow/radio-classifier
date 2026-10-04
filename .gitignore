@@ -13,4 +13,5 @@ wheels/
 .ait/
 
 /radio.db
+/video.db
 /FRESH_CLAUDE.md

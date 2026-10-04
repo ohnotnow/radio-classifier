@@ -145,6 +145,7 @@ Once stories exist, `search` lists each matching story once, with its listing an
 | `show ID` | One file's metadata, verdict, score reasons, story and episode summary, and transcript. `show sID` shows a story and all its episode summaries. |
 | `export ID` | A transcript as SRT subtitles. `--plain` for text only. |
 | `stats` | Collection totals and transcription progress. |
+| `video scan ROOT`, `video transcribe`, `video summarise` | The same idea for a video collection, in its own database (`video.db` by default; video commands refuse a radio database). In progress. |
 
 ## How the classifier decides
 

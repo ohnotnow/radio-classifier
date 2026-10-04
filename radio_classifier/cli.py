@@ -9,7 +9,7 @@ def main(argv=None):
         prog="radio-classifier",
         description="Find the radio dramas hiding in a messy music collection.",
     )
-    parser.add_argument("--db", default="radio.db", help="SQLite database path (default: radio.db)")
+    parser.add_argument("--db", help="SQLite database path (default: video.db for `video` commands, radio.db otherwise)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("scan", help="Walk a directory tree and record audio metadata")
@@ -72,10 +72,43 @@ def main(argv=None):
 
     sub.add_parser("stats", help="Collection and progress counts")
 
+    p = sub.add_parser("video", help="Transcribe and summarise a video collection (own database: video.db)")
+    video = p.add_subparsers(dest="video_command", required=True)
+    v = video.add_parser("scan", help="Walk a mounted share and record each video's duration, language and subtitles")
+    v.add_argument("root")
+    v = video.add_parser("transcribe", help="Whole-file text for each video: subtitles, else speech-to-text")
+    v.add_argument("--limit", type=int, help="Stop after N files")
+    v.add_argument("--exclude", action="append", default=[], metavar="REGEX",
+                   help="Also skip files whose path matches, on top of the `exclude` list (repeatable)")
+    v.add_argument("--pause", type=float, default=0.0, metavar="SECS",
+                   help="Cool-down sleep between files (thermal relief)")
+    v.add_argument("--gentle", action="store_true",
+                   help="CPU-only inference, leaves the GPU free for real work; "
+                        "pair with: taskpolicy -c background uv run ...")
+    v.add_argument("--workday", action="store_true",
+                   help="Set-and-forget for multi-day runs: gentle CPU mode "
+                        "07:00-23:00 so the computer stays usable, full-speed GPU "
+                        "overnight with a cool-down pause so the fans stay quiet")
+    v = video.add_parser("summarise", help="LLM summary, genres and set pieces for each transcribed video")
+    v.add_argument("--like", metavar="PATTERN", help="Only files whose path matches this SQL LIKE pattern")
+    v.add_argument("--limit", type=int, help="Stop after N files")
+    v.add_argument("--exclude", action="append", default=[], metavar="REGEX",
+                   help="Also skip files whose path matches, on top of the `exclude` list (repeatable)")
+
     args = parser.parse_args(argv)
+    db_path = args.db or ("video.db" if args.command == "video" else "radio.db")
+    if args.command == "video":
+        from .video.db import connect_video
+
+        con = connect_video(db_path)
+        try:
+            print(f"video {args.video_command}: not implemented yet")
+            return 2
+        finally:
+            con.close()
     if args.command == "transcribe" and "parakeet" not in args.model.lower():
         parser.error(f"--model must be a Parakeet model, got {args.model}")
-    con = db.connect(args.db)
+    con = db.connect(db_path)
     try:
         if args.command == "scan":
             return scan_mod.scan(con, args.root)

@@ -4,9 +4,9 @@ Local CLI that finds radio dramas in a large, badly named audio collection by tr
 
 ## Running things
 
-- `uv run python -m radio_classifier <command>`; commands are `scan`, `classify`, `transcribe`, `summarise`, `exclude`, `search`, `grep`, `show`, `export`, `stats`.
+- `uv run python -m radio_classifier <command>`; commands are `scan`, `classify`, `transcribe`, `summarise`, `exclude`, `search`, `grep`, `show`, `export`, `stats`, plus the `video` group (`video scan|transcribe|summarise`), which defaults to `video.db` instead of `radio.db` and refuses a database holding classified radio files. Design: ant note racl-cwm6b, work: ait epic racl-VqXmZ.
 - Scratch scripts that import the package need `PYTHONPATH=.` (it isn't installed as a package).
-- There is no test suite yet.
+- Tests: `uv run python -m pytest` (`python -m` puts the repo on the import path). They cover only the pure decisions in `video/rules.py`; the cases live in `tests/fixtures/video_rules.json` so a port could run the same ones. ASR, LLM and share-walking code is checked by running it.
 
 ## Data you must not damage
 
