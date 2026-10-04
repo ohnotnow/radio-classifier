@@ -114,6 +114,11 @@ def main(argv=None):
                 if args.video_command == "scan":
                     return video_scan.scan(con, args.root, new_root=args.new_root)
                 return video_scan.remount(con, args.old, args.new)
+            if args.video_command == "transcribe":
+                from .video import transcribe as video_transcribe
+
+                return video_transcribe.transcribe(con, limit=args.limit, exclude=args.exclude, pause=args.pause,
+                                                   gentle=args.gentle, workday=args.workday)
             print(f"video {args.video_command}: not implemented yet")
             return 2
         finally:

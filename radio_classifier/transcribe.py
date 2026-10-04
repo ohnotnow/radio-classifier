@@ -9,6 +9,7 @@ import mlx.core as mx
 from . import db, excludes
 
 DEFAULT_MODEL = "mlx-community/parakeet-tdt-0.6b-v2"
+MULTILINGUAL_MODEL = "mlx-community/parakeet-tdt-0.6b-v3"  # 25 European languages; worse than v2 on old English audio
 
 # --workday: be gentle while people are awake, brisk-but-quiet overnight.
 WORKDAY_START, WORKDAY_END = 7, 23  # local hours
@@ -34,8 +35,10 @@ def is_later_part(basename):
     return False
 
 
-def clip_to_wav(src, seconds, wav_path, force_format=None):
+def clip_to_wav(src, seconds, wav_path, force_format=None, start=0):
     cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y"]
+    if start > 0:
+        cmd += ["-ss", str(start)]  # before -i: a fast input seek, which reads little over a network share
     if force_format:
         cmd += ["-f", force_format]
     cmd += ["-i", src]
@@ -46,7 +49,7 @@ def clip_to_wav(src, seconds, wav_path, force_format=None):
     if proc.returncode != 0:
         # Some MP3s carry a RIFF header ("invalid start code ID3 in RIFF header"); naming the format works.
         if not force_format and src.lower().endswith(".mp3"):
-            return clip_to_wav(src, seconds, wav_path, force_format="mp3")
+            return clip_to_wav(src, seconds, wav_path, force_format="mp3", start=start)
         raise RuntimeError(f"ffmpeg: {proc.stderr.strip()[:300]}")
 
 
@@ -109,6 +112,14 @@ def in_workday_hours():
     return WORKDAY_START <= time.localtime().tm_hour < WORKDAY_END
 
 
+def mode_note(gentle, workday, pause):
+    if workday:
+        return f" (workday: CPU {WORKDAY_START:02d}:00-{WORKDAY_END:02d}:00, GPU + {pause or NIGHT_PAUSE:.0f}s pause overnight)"
+    if gentle:
+        return " (gentle: CPU-only)"
+    return ""
+
+
 def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
                verdicts=("likely",), deepen=False, exclude=(),
                pause=0.0, gentle=False, workday=False):
@@ -123,16 +134,31 @@ def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
         return 0
 
     window = "whole file" if seconds <= 0 else f"first {seconds}s"
-    if workday:
-        mode = f" (workday: CPU {WORKDAY_START:02d}:00-{WORKDAY_END:02d}:00, GPU + {pause or NIGHT_PAUSE:.0f}s pause overnight)"
-    elif gentle:
-        mode = " (gentle: CPU-only)"
-    else:
-        mode = ""
-    print(f"Transcribing {window} of {len(candidates)} files with {model}{mode}", flush=True)
+    print(f"Transcribing {window} of {len(candidates)} files with {model}{mode_note(gentle, workday, pause)}", flush=True)
     asr = make_asr(model)
-    daytime = None
 
+    def process(row):
+        fd, wav_path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        try:
+            clip_to_wav(row["path"], seconds, wav_path)
+            text, segments = asr(wav_path)
+        finally:
+            try:
+                os.unlink(wav_path)
+            except OSError:
+                pass
+        actual = min(seconds, row["duration"]) if (seconds > 0 and row["duration"]) else (row["duration"] or seconds)
+        return model, actual, text, segments
+
+    return run_loop(con, candidates, process, model, pause=pause, workday=workday)
+
+
+def run_loop(con, candidates, process, failure_model, pause=0.0, workday=False):
+    """Transcribe candidates one at a time, committing after each. process(row) returns
+    (model, seconds, text, segments) or raises; a failure is recorded against failure_model.
+    Rows need id, path, artist, album and title (for the search index)."""
+    daytime = None
     done = failed = 0
     started = time.time()
     for i, row in enumerate(candidates, 1):
@@ -145,15 +171,11 @@ def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
                 daytime = now_day
         name = os.path.basename(row["path"])
         t0 = time.time()
-        fd, wav_path = tempfile.mkstemp(suffix=".wav")
-        os.close(fd)
         try:
-            clip_to_wav(row["path"], seconds, wav_path)
-            text, segments = asr(wav_path)
-            actual = min(seconds, row["duration"]) if (seconds > 0 and row["duration"]) else (row["duration"] or seconds)
+            model, seconds, text, segments = process(row)
             con.execute(
                 "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, ?, ?, NULL)",
-                (row["id"], model, actual, text),
+                (row["id"], model, seconds, text),
             )
             db.index_transcript(con, row["id"], text, row["path"],
                                 row["artist"], row["album"], row["title"])
@@ -164,16 +186,12 @@ def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
         except Exception as exc:
             con.execute(
                 "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, 0, '', ?)",
-                (row["id"], model, str(exc)[:500]),
+                (row["id"], failure_model, str(exc)[:500]),
             )
             db.save_segments(con, row["id"], [])
             failed += 1
             status = f"FAILED ({str(exc)[:80]})"
         finally:
-            try:
-                os.unlink(wav_path)
-            except OSError:
-                pass
             # MLX keeps freed buffers for reuse; varied clip lengths stop them matching, so without
             # this the cache grew to 11.6 GB over 80 files on a 24 GB Mac (2026-09-24).
             mx.clear_cache()
