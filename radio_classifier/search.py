@@ -28,6 +28,11 @@ def fmt_srt_time(seconds):
     return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
 
 
+def missing_note(row):
+    """' (missing since 2026-10-04)' for a file the last scan didn't find; its transcript is kept (racl-9X77J)."""
+    return f" (missing since {row['missing_since'][:10]})" if row["missing_since"] else ""
+
+
 def first_hit(con, file_id, words):
     """Earliest sentence mentioning any query word, so a hit can say where in the file to look."""
     for row in con.execute("SELECT start, text FROM segments WHERE file_id = ? ORDER BY start", (file_id,)):
@@ -80,7 +85,7 @@ def search(con, query, limit=20, any_word=False):
     try:
         file_hits = con.execute(
             """
-            SELECT f.id, f.path, f.duration, f.verdict, sf.story_id, sf.episode,
+            SELECT f.id, f.path, f.duration, f.verdict, f.missing_since, sf.story_id, sf.episode,
                    snippet(search_index, 0, '>>', '<<', ' ... ', 16) AS snip,
                    bm25(search_index, 3.0, 1.0, 0.5, 0.5, 0.5) AS rank
             FROM search_index
@@ -122,7 +127,7 @@ def search(con, query, limit=20, any_word=False):
         if n:
             print()
         if is_file:
-            print(wrapped(f"[{item['id']}] ({fmt_duration(item['duration'])}, {item['verdict']}) {item['path']}", first=""))
+            print(wrapped(f"[{item['id']}] ({fmt_duration(item['duration'])}, {item['verdict']}) {item['path']}{missing_note(item)}", first=""))
             if item["snip"]:
                 print(wrapped(item["snip"].strip()))
             hit = first_hit(con, item["id"], words)
@@ -141,7 +146,8 @@ def search(con, query, limit=20, any_word=False):
         for row in hits[:EPISODES_SHOWN]:
             hit = first_hit(con, row["id"], words)
             where = f"{fmt_clock(hit['start'])}: {hit['text'][:80]}" if hit else (row["snip"] or "")
-            print(wrapped(f"ep {row['episode']} [{row['id']}] {where.strip()}", indent="         ", first="      "))
+            print(wrapped(f"ep {row['episode']} [{row['id']}]{missing_note(row)} {where.strip()}",
+                          indent="         ", first="      "))
         if len(hits) > EPISODES_SHOWN:
             print(f"      ... and {len(hits) - EPISODES_SHOWN} more episodes")
     return 0
@@ -156,14 +162,14 @@ def grep(con, pattern, limit=50):
     shown = 0
     for row in con.execute(
         """
-        SELECT f.id, f.path, f.artist, f.album, f.title, f.duration, f.verdict,
+        SELECT f.id, f.path, f.artist, f.album, f.title, f.duration, f.verdict, f.missing_since,
                t.file_id IS NOT NULL AS transcribed
         FROM files f LEFT JOIN transcripts t ON t.file_id = f.id
         """
     ):
         if rx.search(haystack(row)):
             mark = "T" if row["transcribed"] else "-"
-            print(f"[{row['id']}] {mark} ({fmt_duration(row['duration'])}, {row['verdict']}) {row['path']}")
+            print(f"[{row['id']}] {mark} ({fmt_duration(row['duration'])}, {row['verdict']}) {row['path']}{missing_note(row)}")
             shown += 1
             if shown >= limit:
                 print("... (limit reached)")
@@ -186,7 +192,9 @@ def show(con, ident):
     if not row:
         print(f"No file with id {file_id}")
         return 1
-    print(row["path"])
+    print(row["path"] + missing_note(row))
+    if row["changed_at"]:
+        print(f"  changed since transcribed (scan of {row['changed_at'][:10]}); the transcript is the earlier version's")
     print(f"  duration: {fmt_duration(row['duration'])}  bitrate: {row['bitrate']}  channels: {row['channels']}")
     print(f"  artist: {row['artist']}  album: {row['album']}  title: {row['title']}  genre: {row['genre']}")
     print(f"  verdict: {row['verdict']} (score {row['score']}: {row['reasons']})")
@@ -226,7 +234,7 @@ def show_story(con, story_id):
         return 1
     episodes = con.execute(
         """
-        SELECT f.id, f.path, f.duration, sf.episode, m.text AS summary
+        SELECT f.id, f.path, f.duration, f.missing_since, sf.episode, m.text AS summary
         FROM story_files sf
         JOIN files f ON f.id = sf.file_id
         LEFT JOIN summaries m ON m.file_id = f.id AND m.error IS NULL
@@ -251,7 +259,7 @@ def show_story(con, story_id):
     for n, ep in enumerate(episodes):
         # Copies of the same recording share an episode number; the one with the summary comes first.
         label = "copy" if n and ep["episode"] == episodes[n - 1]["episode"] else f"{ep['episode']}."
-        print(wrapped(f"{label:>4} [{ep['id']}] ({fmt_duration(ep['duration'])}) {os.path.basename(ep['path'])}",
+        print(wrapped(f"{label:>4} [{ep['id']}] ({fmt_duration(ep['duration'])}) {os.path.basename(ep['path'])}{missing_note(ep)}",
                       indent="       ", first=""))
         if ep["summary"]:
             print(wrapped(ep["summary"], indent="       "))
@@ -288,4 +296,8 @@ def stats(con):
         "SELECT SUM(error IS NULL), SUM(error IS NOT NULL) FROM transcripts"
     ).fetchone()
     print(f"transcripts: {done or 0} done, {failed or 0} failed")
+    missing, changed = con.execute(
+        "SELECT SUM(missing_since IS NOT NULL), SUM(changed_at IS NOT NULL) FROM files"
+    ).fetchone()
+    print(f"{missing or 0} missing (kept), {changed or 0} changed since transcribed")
     return 0

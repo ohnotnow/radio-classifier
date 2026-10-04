@@ -1,3 +1,4 @@
+import os
 import sqlite3
 
 SCHEMA = """
@@ -87,12 +88,51 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
 """
 
 
+# Columns added after databases already existed: (column, type), added in place by connect().
+ADDED_FILE_COLUMNS = [
+    ("missing_since", "TEXT"),  # when a scan last found the file gone; NULL while present (racl-9X77J)
+    ("changed_at", "TEXT"),     # when a scan saw a transcribed file's size or mtime change
+]
+
+
 def connect(db_path):
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.executescript(SCHEMA)
+    have = {r["name"] for r in con.execute("PRAGMA table_info(files)")}
+    for column, kind in ADDED_FILE_COLUMNS:
+        if column not in have:
+            con.execute(f"ALTER TABLE files ADD COLUMN {column} {kind}")
+    con.commit()
     return con
+
+
+UNDER = "substr(path, 1, length(?)) = ?"  # exact prefix: LIKE would treat _ and % in folder names as wildcards
+
+
+def rows_under(con, root, columns="id, path, size, mtime"):
+    prefix = root.rstrip(os.sep) + os.sep
+    return con.execute(f"SELECT {columns} FROM files WHERE {UNDER}", (prefix, prefix)).fetchall()
+
+
+def has_transcript(con, file_id):
+    return con.execute("SELECT 1 FROM transcripts WHERE file_id = ?", (file_id,)).fetchone() is not None
+
+
+def record_presence(con, existing, seen):
+    """After a scan: mark rows whose file wasn't found as missing, and clear the mark on ones found again.
+    Nothing is ever deleted: transcripts and summaries are archive (ant racl-9X77J). Returns the
+    number newly marked missing."""
+    gone = [(file_id,) for path, file_id in existing.items() if path not in seen]
+    back = [(file_id,) for path, file_id in existing.items() if path in seen]
+    newly = sum(
+        con.execute("UPDATE files SET missing_since = datetime('now') WHERE id = ? AND missing_since IS NULL",
+                    row).rowcount
+        for row in gone
+    )
+    con.executemany("UPDATE files SET missing_since = NULL WHERE id = ? AND missing_since IS NOT NULL", back)
+    return newly
 
 
 def index_transcript(con, file_id, text, path, artist, album, title):
@@ -109,11 +149,3 @@ def save_segments(con, file_id, segments):
         "INSERT INTO segments (file_id, start, end, text) VALUES (?, ?, ?, ?)",
         [(file_id, start, end, text) for start, end, text in segments],
     )
-
-
-def forget_file(con, file_id):
-    con.execute("DELETE FROM segments WHERE file_id = ?", (file_id,))
-    con.execute("DELETE FROM search_index WHERE rowid = ?", (file_id,))
-    con.execute("DELETE FROM transcripts WHERE file_id = ?", (file_id,))
-    con.execute("DELETE FROM summaries WHERE file_id = ?", (file_id,))
-    con.execute("DELETE FROM story_files WHERE file_id = ?", (file_id,))

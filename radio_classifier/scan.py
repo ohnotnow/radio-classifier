@@ -53,16 +53,17 @@ def read_metadata(path):
 
 def scan(con, root):
     root = os.path.abspath(root)
-    existing = {
-        row["path"]: (row["size"], row["mtime"], row["id"])
-        for row in con.execute(
-            "SELECT id, path, size, mtime FROM files WHERE path LIKE ?",
-            (root + os.sep + "%",),
-        )
-    }
+    if not os.path.isdir(root):
+        print(f"Not a directory: {root}")
+        return 2
+    existing = {row["path"]: (row["size"], row["mtime"], row["id"]) for row in db.rows_under(con, root)}
 
     print(f"Listing audio files under {root} ...", flush=True)
     paths = list(find_audio(root))
+    if not paths and existing:
+        print(f"Found no audio files, but the database has {len(existing)} under {root} "
+              "(drive not mounted?). Nothing changed.")
+        return 1
     print(f"Found {len(paths)} audio files; reading metadata ...", flush=True)
 
     added = updated = unchanged = errors = 0
@@ -97,8 +98,10 @@ def scan(con, root):
                  artist, album, title, genre, error),
             )
             if prior:
+                # Kept, not thrown away: a re-tag changes the size but not the audio (ant racl-9X77J).
                 updated += 1
-                db.forget_file(con, prior[2])  # file changed, transcript is stale
+                if db.has_transcript(con, prior[2]):
+                    con.execute("UPDATE files SET changed_at = datetime('now') WHERE id = ?", (prior[2],))
             else:
                 added += 1
         if i % 2000 == 0:
@@ -107,18 +110,13 @@ def scan(con, root):
         if i % 500 == 0:
             con.commit()
 
-    pruned = 0
-    for path, (_, _, file_id) in existing.items():
-        if path not in seen:
-            db.forget_file(con, file_id)
-            con.execute("DELETE FROM files WHERE id = ?", (file_id,))
-            pruned += 1
+    missing = db.record_presence(con, {path: row[2] for path, row in existing.items()}, seen)
     con.commit()
 
     print(
         f"Scan complete in {time.time() - started:.0f}s: "
-        f"{added} added, {updated} updated, {unchanged} unchanged, "
-        f"{pruned} pruned, {errors} unreadable.",
+        f"{added} added, {updated} changed (transcripts kept), {unchanged} unchanged, "
+        f"{missing} missing (kept), {errors} unreadable.",
         flush=True,
     )
     return 0

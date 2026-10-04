@@ -39,14 +39,6 @@ def probe(path):
     return float(duration) if duration else None, language, stream, None
 
 
-UNDER = "substr(path, 1, length(?)) = ?"  # exact prefix: LIKE would treat _ and % in folder names as wildcards
-
-
-def rows_under(con, root, columns="id, path, size, mtime"):
-    prefix = root + os.sep
-    return con.execute(f"SELECT {columns} FROM files WHERE {UNDER}", (prefix, prefix)).fetchall()
-
-
 def remounted_from(con, root, found):
     """The old root, if these look like videos already scanned elsewhere (same name, size and mtime)."""
     sample = sorted(path for path, _ in found)[:rules.REMOUNT_SAMPLE]
@@ -72,14 +64,14 @@ def scan(con, root, new_root=False):
     if not os.path.isdir(root):
         print(f"Not a directory: {root}")
         return 2
-    existing = {row["path"]: (row["size"], row["mtime"], row["id"]) for row in rows_under(con, root)}
+    existing = {row["path"]: (row["size"], row["mtime"], row["id"]) for row in db.rows_under(con, root)}
 
     print(f"Listing videos under {root} ...", flush=True)
     found = list(find_videos(root))
     if not found and existing:
         # An unmounted share can leave an empty mountpoint behind: pruning would throw away every transcript.
         print(f"Found no videos, but the database has {len(existing)} under {root} (share not mounted?). "
-              "Nothing pruned.")
+              "Nothing changed.")
         return 1
     if found and not existing and not new_root:
         # macOS mounts a share at /Volumes/ssd-1 when a stale /Volumes/ssd is still there: without this, the
@@ -123,9 +115,10 @@ def scan(con, root, new_root=False):
             )
             file_id = con.execute("SELECT id FROM files WHERE path = ?", (path,)).fetchone()[0]
             if prior:
+                # Kept, not thrown away: transcripts and summaries are archive (ant racl-9X77J).
                 updated += 1
-                db.forget_file(con, file_id)  # file changed: transcript and summary are stale
-                con.execute("DELETE FROM video_summaries WHERE file_id = ?", (file_id,))
+                if db.has_transcript(con, file_id):
+                    con.execute("UPDATE files SET changed_at = datetime('now') WHERE id = ?", (file_id,))
             else:
                 added += 1
             con.execute(
@@ -133,7 +126,7 @@ def scan(con, root, new_root=False):
                 INSERT INTO video_files (file_id, audio_language, subtitle_stream, probe_error) VALUES (?, ?, ?, ?)
                 ON CONFLICT(file_id) DO UPDATE SET
                     audio_language = excluded.audio_language, subtitle_stream = excluded.subtitle_stream,
-                    language = NULL, language_basis = NULL, probe_error = excluded.probe_error
+                    probe_error = excluded.probe_error
                 """,
                 (file_id, language, stream, error),
             )
@@ -146,18 +139,13 @@ def scan(con, root, new_root=False):
         if i % 500 == 0:
             con.commit()
 
-    pruned = 0
-    for path, (_, _, file_id) in existing.items():
-        if path not in seen:
-            db.forget_file(con, file_id)
-            con.execute("DELETE FROM files WHERE id = ?", (file_id,))  # cascades to video_files, video_summaries
-            pruned += 1
+    missing = db.record_presence(con, {path: row[2] for path, row in existing.items()}, seen)
     con.commit()
 
     print(
         f"Scan complete in {time.time() - started:.0f}s: "
-        f"{added} added, {updated} updated, {unchanged} unchanged, "
-        f"{pruned} pruned, {errors} unreadable.",
+        f"{added} added, {updated} changed (transcripts kept), {unchanged} unchanged, "
+        f"{missing} missing (kept), {errors} unreadable.",
         flush=True,
     )
     return 0
@@ -169,7 +157,7 @@ def remount(con, old, new):
     if not os.path.isdir(new):
         print(f"Not a directory: {new}")
         return 2
-    rows = rows_under(con, old, "id, path")
+    rows = db.rows_under(con, old, "id, path")
     if not rows:
         print(f"Nothing stored under {old}.")
         return 2
@@ -183,7 +171,7 @@ def remount(con, old, new):
         con.executemany("UPDATE search_index SET path = ? WHERE rowid = ?", moved)
         con.execute(
             "UPDATE video_files SET sidecar_srt = ? || substr(sidecar_srt, length(?) + 1) "
-            f"WHERE {UNDER.replace('path', 'sidecar_srt')}",
+            f"WHERE {db.UNDER.replace('path', 'sidecar_srt')}",
             (new, old, old + os.sep, old + os.sep),
         )
     print(f"Moved {len(moved)} files from {old} to {new}.")

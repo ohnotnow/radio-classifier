@@ -23,7 +23,7 @@ def pick_candidates(con, exclude=()):
         FROM files f
         JOIN video_files v ON v.file_id = f.id
         LEFT JOIN transcripts t ON t.file_id = f.id
-        WHERE f.scan_error IS NULL AND t.file_id IS NULL
+        WHERE f.scan_error IS NULL AND f.missing_since IS NULL AND t.file_id IS NULL
         ORDER BY f.path
         """
     ).fetchall()

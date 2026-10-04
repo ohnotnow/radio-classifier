@@ -8,7 +8,7 @@ If you have decades of accumulated audio (CD rips, cassette transfers, off-air r
 
 radio-classifier works in three stages, each a separate command you can run and re-run:
 
-1. `scan` walks your collection and records duration, bitrate, channels and tags for every audio file into a local SQLite database. It never writes to the source drive.
+1. `scan` walks your collection and records duration, bitrate, channels and tags for every audio file into a local SQLite database. It never writes to the source drive, and never deletes anything from the database: a file that has gone is marked missing and keeps its transcript and summaries, so an unplugged drive or a reorganised folder costs nothing.
 2. `classify` scores every file on how likely it is to be spoken-word drama, using duration, mono/stereo, bitrate, genre tags, episode-numbering patterns and keywords. A 90-minute mono file at 64kbps is probably not a pop single, whatever it's called.
 3. `transcribe` runs a local speech-to-text model (Parakeet, via Apple's MLX) over the first three minutes of each candidate and indexes the text for full-text search. Radio dramas almost always open with a continuity announcement ("Omega Point, by Bruce Stewart, with Dinsdale Landen and Sydney Tafler..."), so title, author and cast end up searchable even when the filename is gibberish.
 
@@ -135,7 +135,7 @@ Once stories exist, `search` lists each matching story once, with its listing an
 
 | Command | Purpose |
 |---|---|
-| `scan ROOT` | Walk a directory tree and record audio metadata. Incremental; prunes files that have gone. |
+| `scan ROOT` | Walk a directory tree and record audio metadata. Incremental. Files that have gone are marked missing (kept, with their transcripts, and shown as "missing since" in `search`, `show` and `grep`; skipped by `transcribe` and `summarise`); found again, the mark clears. A changed file (a re-tag changes its size) keeps its transcript and is counted in `stats` as changed since transcribed. Refuses a missing root, and an empty one that has files in the database (drive not mounted?). |
 | `classify` | Score every file: likely / maybe / unlikely drama. |
 | `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip more than the `exclude` list for this run, `--model` to use a different Parakeet model (e.g. `mlx-community/parakeet-tdt-0.6b-v3` for multilingual audio), plus `--workday`, `--gentle`, `--pause`. |
 | `summarise` | Group folders into stories, then an LLM listing per story and a summary per drama or reading episode. `--like PATTERN` (SQL LIKE on paths, picks folders), `--limit N`, `--exclude REGEX` (repeatable), `--dry-run`, `--group-only`. |

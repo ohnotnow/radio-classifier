@@ -12,6 +12,7 @@ Local CLI that finds radio dramas in a large, badly named audio collection by tr
 
 - `radio.db` in the repo root is the owner's real database (gitignored): 41,000 scanned files and days of transcription work. Inspect it with `sqlite3 -readonly radio.db`. Never delete or rebuild it; test experiments in scratch scripts that don't write to it, and ask before any run that rewrites existing transcripts.
 - The audio collection itself is strictly read-only. Nothing in this project writes to the source drive.
+- Transcripts, segments, summaries and story links are archive (hours of GPU and paid LLM calls): nothing deletes them automatically. Scans mark gone files `missing_since` and changed ones `changed_at`, keeping everything. Any code that removes those rows must be an explicit, owner-run command that lists what it will remove (ant racl-9X77J).
 
 ## Layout
 

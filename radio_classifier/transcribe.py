@@ -61,7 +61,7 @@ def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
                t.seconds AS done_seconds
         FROM files f
         LEFT JOIN transcripts t ON t.file_id = f.id
-        WHERE f.scan_error IS NULL
+        WHERE f.scan_error IS NULL AND f.missing_since IS NULL
           AND f.verdict IN (%s)
         """
         % ",".join("?" * len(verdicts)),

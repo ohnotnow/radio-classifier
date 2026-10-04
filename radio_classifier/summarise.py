@@ -145,7 +145,7 @@ def find_folders(con, like=None, exclude=()):
         """
         SELECT f.id, f.path, f.duration, f.artist, f.album, f.title, t.text
         FROM files f JOIN transcripts t ON t.file_id = f.id
-        WHERE t.error IS NULL AND t.text != ''
+        WHERE t.error IS NULL AND t.text != '' AND f.missing_since IS NULL
         """
     ).fetchall()
     folders = defaultdict(list)
