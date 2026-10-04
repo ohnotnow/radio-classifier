@@ -13,8 +13,8 @@ from . import rules
 PROBE_SECONDS = 120
 
 
-def pick_candidates(con, exclude=()):
-    """Scanned videos with no transcript row yet (a failure counts as done, as in radio without --deepen)."""
+def pick_candidates(con, exclude=(), retry_failed=False):
+    """Scanned videos with no transcript row yet, plus failed ones with retry_failed."""
     excluded = excludes.matcher(con, exclude)
     rows = con.execute(
         """
@@ -23,9 +23,11 @@ def pick_candidates(con, exclude=()):
         FROM files f
         JOIN video_files v ON v.file_id = f.id
         LEFT JOIN transcripts t ON t.file_id = f.id
-        WHERE f.scan_error IS NULL AND f.missing_since IS NULL AND t.file_id IS NULL
+        WHERE f.scan_error IS NULL AND f.missing_since IS NULL
+          AND (t.file_id IS NULL OR (? AND t.error IS NOT NULL))
         ORDER BY f.path
-        """
+        """,
+        (1 if retry_failed else 0,),
     ).fetchall()
     return [r for r in rows if not excluded(r)]
 
@@ -60,11 +62,11 @@ def wav_of(path, seconds, asr, start=0):
             pass
 
 
-def transcribe(con, limit=None, exclude=(), pause=0.0, gentle=False, workday=False):
+def transcribe(con, limit=None, exclude=(), pause=0.0, gentle=False, workday=False, retry_failed=False):
     if gentle and not workday:
         mx.set_default_device(mx.cpu)
 
-    candidates = pick_candidates(con, exclude)
+    candidates = pick_candidates(con, exclude, retry_failed)
     if limit:
         candidates = candidates[:limit]
     reachable = [r for r in candidates if os.path.exists(r["path"])]

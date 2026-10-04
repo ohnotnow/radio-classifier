@@ -25,6 +25,7 @@ def main(argv=None):
                         "for multilingual audio (default: %(default)s)")
     p.add_argument("--verdict", default="likely", help="Comma list: likely,maybe,unlikely or all (default: likely)")
     p.add_argument("--deepen", action="store_true", help="Also re-transcribe files whose existing transcript is shorter than --seconds")
+    p.add_argument("--retry-failed", action="store_true", help="Also try again files whose last transcription failed")
     p.add_argument("--exclude", action="append", default=[], metavar="REGEX",
                    help="Also skip files whose path/tags match, on top of the `exclude` list (repeatable)")
     p.add_argument("--pause", type=float, default=0.0, metavar="SECS",
@@ -84,6 +85,7 @@ def main(argv=None):
     v.add_argument("new")
     v = video.add_parser("transcribe", help="Whole-file text for each video: subtitles, else speech-to-text")
     v.add_argument("--limit", type=int, help="Stop after N files")
+    v.add_argument("--retry-failed", action="store_true", help="Also try again files whose last transcription failed")
     v.add_argument("--exclude", action="append", default=[], metavar="REGEX",
                    help="Also skip files whose path matches, on top of the `exclude` list (repeatable)")
     v.add_argument("--pause", type=float, default=0.0, metavar="SECS",
@@ -118,7 +120,8 @@ def main(argv=None):
                 from .video import transcribe as video_transcribe
 
                 return video_transcribe.transcribe(con, limit=args.limit, exclude=args.exclude, pause=args.pause,
-                                                   gentle=args.gentle, workday=args.workday)
+                                                   gentle=args.gentle, workday=args.workday,
+                                                   retry_failed=args.retry_failed)
             print(f"video {args.video_command}: not implemented yet")
             return 2
         finally:
@@ -137,7 +140,7 @@ def main(argv=None):
                 con, seconds=args.seconds, limit=args.limit,
                 model=args.model, verdicts=verdicts, deepen=args.deepen,
                 exclude=args.exclude, pause=args.pause, gentle=args.gentle,
-                workday=args.workday,
+                workday=args.workday, retry_failed=args.retry_failed,
             )
         if args.command == "summarise":
             return summarise_mod.summarise(con, like=args.like, limit=args.limit, exclude=args.exclude,

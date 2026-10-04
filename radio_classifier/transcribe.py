@@ -14,6 +14,7 @@ MULTILINGUAL_MODEL = "mlx-community/parakeet-tdt-0.6b-v3"  # 25 European languag
 # --workday: be gentle while people are awake, brisk-but-quiet overnight.
 WORKDAY_START, WORKDAY_END = 7, 23  # local hours
 NIGHT_PAUSE = 8.0  # seconds between files overnight, keeps fans civil
+UNREACHABLE_STOP = 5  # files in a row that have vanished mid-run: the share or drive has gone, so stop
 
 # First match decides: is this a part/episode beyond the first? Those get
 # transcribed last, because announcer intros and opening scenes live in part 1.
@@ -53,12 +54,12 @@ def clip_to_wav(src, seconds, wav_path, force_format=None, start=0):
         raise RuntimeError(f"ffmpeg: {proc.stderr.strip()[:300]}")
 
 
-def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
+def pick_candidates(con, verdicts, seconds, deepen, exclude=(), retry_failed=False):
     excluded = excludes.matcher(con, exclude)
     rows = con.execute(
         """
         SELECT f.id, f.path, f.duration, f.score, f.artist, f.album, f.title,
-               t.seconds AS done_seconds
+               t.seconds AS done_seconds, t.error AS failed
         FROM files f
         LEFT JOIN transcripts t ON t.file_id = f.id
         WHERE f.scan_error IS NULL AND f.missing_since IS NULL
@@ -72,6 +73,8 @@ def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
         if excluded(row):
             return False
         if row["done_seconds"] is None:
+            return True
+        if retry_failed and row["failed"] is not None:
             return True
         if not deepen:
             return False
@@ -122,11 +125,11 @@ def mode_note(gentle, workday, pause):
 
 def transcribe(con, seconds=180, limit=None, model=DEFAULT_MODEL,
                verdicts=("likely",), deepen=False, exclude=(),
-               pause=0.0, gentle=False, workday=False):
+               pause=0.0, gentle=False, workday=False, retry_failed=False):
     if gentle and not workday:
         mx.set_default_device(mx.cpu)
 
-    candidates = pick_candidates(con, list(verdicts), seconds, deepen, exclude)
+    candidates = pick_candidates(con, list(verdicts), seconds, deepen, exclude, retry_failed)
     if limit:
         candidates = candidates[:limit]
     if not candidates:
@@ -159,7 +162,7 @@ def run_loop(con, candidates, process, failure_model, pause=0.0, workday=False):
     (model, seconds, text, segments) or raises; a failure is recorded against failure_model.
     Rows need id, path, artist, album and title (for the search index)."""
     daytime = None
-    done = failed = 0
+    done = failed = unreachable = in_a_row = 0
     started = time.time()
     for i, row in enumerate(candidates, 1):
         if workday:
@@ -171,30 +174,48 @@ def run_loop(con, candidates, process, failure_model, pause=0.0, workday=False):
                 daytime = now_day
         name = os.path.basename(row["path"])
         t0 = time.time()
-        try:
-            model, seconds, text, segments = process(row)
-            con.execute(
-                "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, ?, ?, NULL)",
-                (row["id"], model, seconds, text),
-            )
-            db.index_transcript(con, row["id"], text, row["path"],
-                                row["artist"], row["album"], row["title"])
-            # Chunk joins can leave a sentence a fraction of a second out of order.
-            db.save_segments(con, row["id"], sorted(segments))
-            done += 1
-            status = f"{time.time() - t0:5.1f}s"
-        except Exception as exc:
-            con.execute(
-                "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, 0, '', ?)",
-                (row["id"], failure_model, str(exc)[:500]),
-            )
-            db.save_segments(con, row["id"], [])
-            failed += 1
-            status = f"FAILED ({str(exc)[:80]})"
-        finally:
-            # MLX keeps freed buffers for reuse; varied clip lengths stop them matching, so without
-            # this the cache grew to 11.6 GB over 80 files on a 24 GB Mac (2026-09-24).
-            mx.clear_cache()
+        # A file gone since the candidates were listed (Samba or Wi-Fi dropped) gets nothing recorded, so
+        # a re-run picks it up again, rather than a failure row that would be skipped for good.
+        reachable = os.path.exists(row["path"])
+        if reachable:
+            try:
+                model, seconds, text, segments = process(row)
+                con.execute(
+                    "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, ?, ?, NULL)",
+                    (row["id"], model, seconds, text),
+                )
+                db.index_transcript(con, row["id"], text, row["path"],
+                                    row["artist"], row["album"], row["title"])
+                # Chunk joins can leave a sentence a fraction of a second out of order.
+                db.save_segments(con, row["id"], sorted(segments))
+                done += 1
+                status = f"{time.time() - t0:5.1f}s"
+            except Exception as exc:
+                reachable = os.path.exists(row["path"])
+                if reachable:
+                    con.execute(
+                        "INSERT OR REPLACE INTO transcripts (file_id, model, seconds, text, error) VALUES (?, ?, 0, '', ?)",
+                        (row["id"], failure_model, str(exc)[:500]),
+                    )
+                    db.save_segments(con, row["id"], [])
+                    failed += 1
+                    status = f"FAILED ({str(exc)[:80]})"
+                else:
+                    con.rollback()  # anything process() wrote for this file
+            finally:
+                # MLX keeps freed buffers for reuse; varied clip lengths stop them matching, so without
+                # this the cache grew to 11.6 GB over 80 files on a 24 GB Mac (2026-09-24).
+                mx.clear_cache()
+        if not reachable:
+            unreachable += 1
+            in_a_row += 1
+            print(f"[{i}/{len(candidates)}] UNREACHABLE (not recorded)  {name}", flush=True)
+            if in_a_row >= UNREACHABLE_STOP:
+                print(f"{in_a_row} files in a row unreachable: share or drive gone? Stopped; nothing was "
+                      "recorded for them. Re-run when it's back.", flush=True)
+                break
+            continue
+        in_a_row = 0
         con.commit()
         print(f"[{i}/{len(candidates)}] {status}  {name}", flush=True)
         pause_now = pause
@@ -205,8 +226,11 @@ def run_loop(con, candidates, process, failure_model, pause=0.0, workday=False):
 
     elapsed = time.time() - started
     print(
-        f"Done: {done} transcribed, {failed} failed, "
-        f"{elapsed / 60:.1f} min ({elapsed / max(1, done + failed):.1f}s/file).",
+        f"Done: {done} transcribed, {failed} failed"
+        + (f", {unreachable} unreachable (not recorded)" if unreachable else "")
+        + f", {elapsed / 60:.1f} min ({elapsed / max(1, done + failed):.1f}s/file).",
         flush=True,
     )
+    if failed:
+        print(f"{failed} failed: re-run with --retry-failed to try them again.", flush=True)
     return 0
