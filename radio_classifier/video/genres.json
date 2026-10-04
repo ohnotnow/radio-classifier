@@ -1,0 +1,245 @@
+{
+ "Action": [
+  "Action Epic",
+  "One-Person Army Action",
+  "War",
+  "Superhero",
+  "Disaster",
+  "Jason Statham Action",
+  "Martial Arts",
+  "Car Action",
+  "B-Action",
+  "War Epic",
+  "Gun Fu",
+  "Sword & Sandal",
+  "Samurai",
+  "Kung Fu",
+  "Wuxia"
+ ],
+ "Adventure": [
+  "Adventure Epic",
+  "Globetrotting Adventure",
+  "Urban Adventure",
+  "Sea Adventure",
+  "Dinosaur Adventure",
+  "Jungle Adventure",
+  "Quest",
+  "Road Trip",
+  "Teen Adventure",
+  "Swashbuckler",
+  "Desert Adventure",
+  "Mountain Adventure"
+ ],
+ "Animation": [
+  "Adult Animation",
+  "Computer Animation",
+  "Hand-Drawn Animation",
+  "Stop Motion Animation"
+ ],
+ "Anime": [
+  "Isekai",
+  "Seinen",
+  "Shōnen",
+  "Slice of Life",
+  "Shōjo",
+  "Iyashikei",
+  "Mecha",
+  "Josei"
+ ],
+ "Comedy": [
+  "Dark Comedy",
+  "Raunchy Comedy",
+  "Sitcom",
+  "Buddy Comedy",
+  "High-Concept Comedy",
+  "Satire",
+  "Teen Comedy",
+  "Parody",
+  "Quirky Comedy",
+  "Slapstick",
+  "Farce",
+  "Mockumentary",
+  "Stoner Comedy",
+  "Body Swap Comedy",
+  "Buddy Cop",
+  "Screwball Comedy",
+  "Stand-Up",
+  "Sketch Comedy"
+ ],
+ "Crime": [
+  "Gangster",
+  "Police Procedural",
+  "True Crime",
+  "Cop Drama",
+  "Caper",
+  "Heist",
+  "Drug Crime",
+  "Film Noir"
+ ],
+ "Documentary": [
+  "Crime Documentary",
+  "Music Documentary",
+  "History Documentary",
+  "Docuseries",
+  "Nature Documentary",
+  "Sports Documentary",
+  "Science & Technology Documentary",
+  "Political Documentary",
+  "Military Documentary",
+  "Faith & Spirituality Documentary",
+  "Food Documentary",
+  "Travel Documentary"
+ ],
+ "Drama": [
+  "Psychological Drama",
+  "Coming-of-Age",
+  "Period Drama",
+  "Biography",
+  "Korean Drama",
+  "Docudrama",
+  "Epic",
+  "History",
+  "Medical Drama",
+  "Teen Drama",
+  "Costume Drama",
+  "Tragedy",
+  "Legal Drama",
+  "Micro-Drama",
+  "Political Drama",
+  "Soap Opera",
+  "Historical Epic",
+  "Workplace Drama",
+  "Showbiz Drama",
+  "Prison Drama",
+  "Financial Drama",
+  "Telenovela",
+  "Social Realism",
+  "Twist in the Tale"
+ ],
+ "Family": [
+  "Animal Adventure"
+ ],
+ "Fantasy": [
+  "Dark Fantasy",
+  "Supernatural Fantasy",
+  "Fantasy Epic",
+  "Sword & Sorcery",
+  "Fairy Tale",
+  "Teen Fantasy"
+ ],
+ "Game Show": [
+  "Survival Competition",
+  "Cooking Competition",
+  "Quiz Show",
+  "Talent Competition",
+  "Beauty Competition"
+ ],
+ "Horror": [
+  "Psychological Horror",
+  "Supernatural Horror",
+  "Folk Horror",
+  "Body Horror",
+  "Slasher Horror",
+  "Monster Horror",
+  "Zombie Horror",
+  "B-Horror",
+  "Found Footage Horror",
+  "Splatter Horror",
+  "Vampire Horror",
+  "Teen Horror",
+  "Witch Horror",
+  "Werewolf Horror",
+  "Ghost Story",
+  "Uncanny"
+ ],
+ "Lifestyle": [
+  "Talk Show",
+  "News",
+  "Home Improvement",
+  "Cooking & Food",
+  "Travel",
+  "Beauty Makeover"
+ ],
+ "Music": [
+  "Concert"
+ ],
+ "Musical": [
+  "Pop Musical",
+  "Classic Musical",
+  "Jukebox Musical",
+  "Rock Musical"
+ ],
+ "Mystery": [
+  "Whodunnit",
+  "Suspense Mystery",
+  "Cozy Mystery",
+  "Hard-boiled Detective",
+  "Bumbling Detective"
+ ],
+ "Reality TV": [
+  "Dating Reality TV",
+  "Docusoap Reality TV",
+  "Hidden Camera",
+  "Business Reality TV",
+  "Crime Reality TV",
+  "Paranormal Reality TV"
+ ],
+ "Romance": [
+  "Steamy Romance",
+  "Dark Romance",
+  "Romantic Comedy",
+  "Feel-Good Romance",
+  "Teen Romance",
+  "Romantic Epic",
+  "Tragic Romance"
+ ],
+ "Sci-Fi": [
+  "Dystopian Sci-Fi",
+  "Space Sci-Fi",
+  "Artificial Intelligence",
+  "Cyberpunk",
+  "Alien Invasion",
+  "Sci-Fi Epic",
+  "Time Travel",
+  "Kaiju",
+  "Steampunk",
+  "Post-Apocalyptic"
+ ],
+ "Seasonal": [
+  "Holiday",
+  "Holiday Comedy",
+  "Holiday Romance",
+  "Holiday Animation",
+  "Holiday Family"
+ ],
+ "Short": [],
+ "Sport": [
+  "Football",
+  "Motorsport",
+  "Boxing",
+  "Soccer",
+  "Basketball",
+  "Baseball",
+  "Water Sport",
+  "Extreme Sport"
+ ],
+ "Thriller": [
+  "Erotic Thriller",
+  "Psychological Thriller",
+  "Conspiracy Thriller",
+  "Survival",
+  "Serial Killer",
+  "Spy",
+  "Cyber Thriller",
+  "Political Thriller",
+  "Legal Thriller",
+  "Giallo",
+  "Eco-Thriller"
+ ],
+ "Western": [
+  "Contemporary Western",
+  "Classical Western",
+  "Spaghetti Western",
+  "Western Epic"
+ ]
+}

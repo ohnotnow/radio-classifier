@@ -122,6 +122,10 @@ def main(argv=None):
                 return video_transcribe.transcribe(con, limit=args.limit, exclude=args.exclude, pause=args.pause,
                                                    gentle=args.gentle, workday=args.workday,
                                                    retry_failed=args.retry_failed)
+            if args.video_command == "summarise":
+                from .video import summarise as video_summarise
+
+                return video_summarise.summarise(con, like=args.like, limit=args.limit, exclude=args.exclude)
             print(f"video {args.video_command}: not implemented yet")
             return 2
         finally:
