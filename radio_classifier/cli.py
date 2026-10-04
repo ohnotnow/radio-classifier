@@ -102,6 +102,10 @@ def main(argv=None):
 
         con = connect_video(db_path)
         try:
+            if args.video_command == "scan":
+                from .video import scan as video_scan
+
+                return video_scan.scan(con, args.root)
             print(f"video {args.video_command}: not implemented yet")
             return 2
         finally:
