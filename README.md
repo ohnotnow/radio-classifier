@@ -80,11 +80,26 @@ Whole files are processed in 180 second chunks, so memory stays under 4GB whatev
 
 If you want manual control over the transcription schedule, `--gentle` forces CPU-only mode and `--pause N` sleeps N seconds between files. Running the whole thing under `taskpolicy -c background` makes it politer still.
 
+## Leaving things out
+
+Programmes you will never search for (panel shows, current affairs, podcasts) can be excluded for good, so `transcribe` and `summarise` skip them on every run without a long list of `--exclude` flags to remember. A pattern is a case-insensitive regex matched against each file's path and tags, the same as `grep`:
+
+```sh
+uv run python -m radio_classifier exclude add 'in our time' --note "archive strand"
+uv run python -m radio_classifier exclude add '\bjam\b(?<!blue jam)' --note "Just a Minute, abbreviated"
+uv run python -m radio_classifier exclude list
+uv run python -m radio_classifier exclude remove 2
+```
+
+`exclude add` shows how many files the pattern matches, folder by folder, so a pattern that also catches something you want (`jam` alone matches Casino Royale and P D James) shows up straight away. `--exclude REGEX` on the command line still works for a one-off run, on top of the list.
+
 ## Story listings and episode summaries
 
-`summarise` groups transcribed files into stories and asks an LLM about each one. For now a story is a folder holding either a single file or a numbered run of files with the same name (`Down Payment On Death 1_5.mp3` to `5_5.mp3`); folders of differently named files are left alone.
+`summarise` groups transcribed files into stories and asks an LLM about each one. A folder holding a single file or a numbered run of files with the same name (`Down Payment On Death 1_5.mp3` to `5_5.mp3`) is one story. Any other folder is grouped by the stronger of the two models, from the file names and the first 30 seconds of each transcript, where the announcer usually names the programme and the episode. It splits anthologies into their stories, puts titled episodes of a serial in order, keeps a trailer apart from what it advertises, and spots copies of the same recording (same name with a suffix, a different name, or an incomplete shorter copy), which share an episode number. Folders of more than 80 files are grouped 80 at a time, then a final call over every story found joins the parts and copies that ended up in different batches. Each folder is saved as soon as it is grouped and never regrouped, because asking again could split it differently.
 
-Each story gets one call to write a listing: what kind of programme it is (drama, reading, panel show, discussion, documentary, music), the title, writer, cast with their roles, and a two or three sentence synopsis that doesn't give away the ending. Dramas and readings then get a four to six sentence summary of every episode, written from the whole transcript, so you can find your place in a serial or track down the scene you half-remember. The episode summaries are full of spoilers; the synopsis isn't.
+The grouping also says what kind of programme each story is. Panel shows, discussions, documentaries and music are kept as stories (so `search` finds them by title) but not described further.
+
+Each drama, reading or unclear story then gets one call to write a listing: what kind of programme it is (drama, reading, panel show, discussion, documentary, music), the title, writer, cast with their roles, and a two or three sentence synopsis that doesn't give away the ending. Dramas and readings then get a four to six sentence summary of every episode, written from the whole transcript (from the longest copy, where there are several), so you can find your place in a serial or track down the scene you half-remember. The episode summaries are full of spoilers; the synopsis isn't.
 
 Set the two models in a `.env` file in the project directory, using litellm model names, along with the provider's API key:
 
@@ -94,11 +109,12 @@ SUMMARY_MODEL=openai/gpt-6-luna
 OPENAI_API_KEY=...
 ```
 
-The story call is short and benefits from a stronger model; the episode calls read whole transcripts, so a cheap model keeps the bill down. With the two models above, 1,307 stories and 3,466 episode summaries cost about $6 and took just under seven hours.
+The story call is short and benefits from a stronger model; the episode calls read whole transcripts, so a cheap model keeps the bill down. With the two models above, the whole collection cost about $30, including some experimentation along the way. That covered about 10,000 transcribed files in 1,729 folders, plenty of them `Unknown Artist` folders and files with names that tell you nothing. They came out as 4,088 stories, 2,892 of them dramas and readings, and 6,740 episode summaries. The final overnight run, 1,822 stories with their episodes, took about seven and a half hours.
 
 ```sh
-uv run python -m radio_classifier summarise --dry-run   # list the stories, no LLM calls
-uv run python -m radio_classifier summarise --limit 5   # try a few first
+uv run python -m radio_classifier summarise --dry-run      # list the folders to group, no LLM calls
+uv run python -m radio_classifier summarise --group-only   # group into stories, check them, describe later
+uv run python -m radio_classifier summarise --limit 5      # try a few first
 uv run python -m radio_classifier summarise
 ```
 
@@ -113,7 +129,7 @@ Once stories exist, `search` lists each matching story once, with its listing an
       ep 2 [35146] 11:22: What about the shop?
 ```
 
-`show s781` gives the full listing and every episode with its summary. `show 35146` on an episode adds the story and that episode's summary above the transcript. The synopsis is safe to read; the episode summaries give the plot away, which is why search results only show the synopsis.
+`show s781` gives the full listing and every episode with its summary, with any copies listed under the episode they duplicate. `show 35146` on an episode adds the story and that episode's summary above the transcript. The synopsis is safe to read; the episode summaries give the plot away, which is why search results only show the synopsis.
 
 ## Commands
 
@@ -121,8 +137,9 @@ Once stories exist, `search` lists each matching story once, with its listing an
 |---|---|
 | `scan ROOT` | Walk a directory tree and record audio metadata. Incremental; prunes files that have gone. |
 | `classify` | Score every file: likely / maybe / unlikely drama. |
-| `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip shows you don't need indexed, `--model` to use a different Parakeet model (e.g. `mlx-community/parakeet-tdt-0.6b-v3` for multilingual audio), plus `--workday`, `--gentle`, `--pause`. |
-| `summarise` | LLM listing per story, and a summary per drama or reading episode. `--like PATTERN` (SQL LIKE on paths), `--limit N`, `--exclude REGEX` (repeatable), `--dry-run`. |
+| `transcribe` | Speech-to-text the start of candidate files. `--seconds N` (default 180, 0 = whole file), `--limit N`, `--verdict likely,maybe`, `--deepen` to re-transcribe with a longer window, `--exclude REGEX` (repeatable) to skip more than the `exclude` list for this run, `--model` to use a different Parakeet model (e.g. `mlx-community/parakeet-tdt-0.6b-v3` for multilingual audio), plus `--workday`, `--gentle`, `--pause`. |
+| `summarise` | Group folders into stories, then an LLM listing per story and a summary per drama or reading episode. `--like PATTERN` (SQL LIKE on paths, picks folders), `--limit N`, `--exclude REGEX` (repeatable), `--dry-run`, `--group-only`. |
+| `exclude add PATTERN` | Never transcribe or summarise files whose path or tags match this regex; shows what it matches. `--note TEXT`. Also `exclude list` and `exclude remove ID`. |
 | `search QUERY` | Full-text search over transcripts, paths, tags and story listings, grouping episodes under their story, with the time of the first matching sentence where known. `--any` matches any word instead of all. |
 | `grep PATTERN` | Case-insensitive regex over paths and tags. Works before anything is transcribed. |
 | `show ID` | One file's metadata, verdict, score reasons, story and episode summary, and transcript. `show sID` shows a story and all its episode summaries. |

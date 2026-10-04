@@ -38,10 +38,12 @@ CREATE TABLE IF NOT EXISTS segments (
 );
 CREATE INDEX IF NOT EXISTS idx_segments_file ON segments(file_id, start);
 
--- One row per story (for now: per folder), written by `summarise`. cast_list is JSON [{actor, role}].
+-- One row per story, written by `summarise`: made when its folder is grouped (title and kind from the
+-- grouping call), filled in when described (model stays NULL until then). A folder can hold several
+-- stories. cast_list is JSON [{actor, role}].
 CREATE TABLE IF NOT EXISTS stories (
     id INTEGER PRIMARY KEY,
-    folder TEXT UNIQUE NOT NULL,
+    folder TEXT NOT NULL,
     kind TEXT,
     kind_reason TEXT,
     title TEXT,
@@ -53,6 +55,7 @@ CREATE TABLE IF NOT EXISTS stories (
     created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Copies of the same recording share an episode number.
 CREATE TABLE IF NOT EXISTS story_files (
     file_id INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
     story_id INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
@@ -66,6 +69,14 @@ CREATE TABLE IF NOT EXISTS summaries (
     model TEXT,
     text TEXT,
     error TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Regexes for things never to transcribe or summarise, matched against path and tags (excludes.py).
+CREATE TABLE IF NOT EXISTS excludes (
+    id INTEGER PRIMARY KEY,
+    pattern TEXT UNIQUE NOT NULL,
+    note TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

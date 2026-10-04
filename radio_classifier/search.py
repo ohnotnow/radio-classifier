@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import textwrap
 
+from .excludes import haystack
 from .summarise import cast_line
 
 FILE_HITS = 500  # file matches fetched before grouping into stories, so a big serial can't crowd out the rest
@@ -129,7 +130,7 @@ def search(con, query, limit=20, any_word=False):
                 print(wrapped(f"first at {fmt_clock(hit['start'])}: {hit['text'][:100]}"))
             continue
         story = con.execute("SELECT * FROM stories WHERE id = ?", (item,)).fetchone()
-        episodes = con.execute("SELECT COUNT(*) FROM story_files WHERE story_id = ?", (item,)).fetchone()[0]
+        episodes = con.execute("SELECT COUNT(DISTINCT episode) FROM story_files WHERE story_id = ?", (item,)).fetchone()[0]
         print(wrapped(story_heading(story, episodes), first=""))
         leads = cast_line(json.loads(story["cast_list"] or "[]")[:3])
         if leads:
@@ -160,8 +161,7 @@ def grep(con, pattern, limit=50):
         FROM files f LEFT JOIN transcripts t ON t.file_id = f.id
         """
     ):
-        haystack = " | ".join(str(v) for v in (row["path"], row["artist"], row["album"], row["title"]) if v)
-        if rx.search(haystack):
+        if rx.search(haystack(row)):
             mark = "T" if row["transcribed"] else "-"
             print(f"[{row['id']}] {mark} ({fmt_duration(row['duration'])}, {row['verdict']}) {row['path']}")
             shown += 1
@@ -192,7 +192,7 @@ def show(con, ident):
     print(f"  verdict: {row['verdict']} (score {row['score']}: {row['reasons']})")
     story = con.execute(
         """
-        SELECT s.*, sf.episode, (SELECT COUNT(*) FROM story_files WHERE story_id = s.id) AS episodes
+        SELECT s.*, sf.episode, (SELECT COUNT(DISTINCT episode) FROM story_files WHERE story_id = s.id) AS episodes
         FROM story_files sf JOIN stories s ON s.id = sf.story_id
         WHERE sf.file_id = ? AND s.error IS NULL
         """,
@@ -226,16 +226,16 @@ def show_story(con, story_id):
         return 1
     episodes = con.execute(
         """
-        SELECT f.id, f.path, f.duration, m.text AS summary
+        SELECT f.id, f.path, f.duration, sf.episode, m.text AS summary
         FROM story_files sf
         JOIN files f ON f.id = sf.file_id
         LEFT JOIN summaries m ON m.file_id = f.id AND m.error IS NULL
         WHERE sf.story_id = ?
-        ORDER BY sf.episode
+        ORDER BY sf.episode, m.text IS NULL, f.duration DESC
         """,
         (story_id,),
     ).fetchall()
-    print(wrapped(story_heading(story, len(episodes)), indent="    ", first=""))
+    print(wrapped(story_heading(story, len({ep["episode"] for ep in episodes})), indent="    ", first=""))
     print(f"  {story['folder']}")
     if story["error"]:
         print(f"  listing FAILED: {story['error']}")
@@ -248,9 +248,11 @@ def show_story(con, story_id):
         print()
         print(wrapped(story["synopsis"], indent="  "))
     print()
-    for n, ep in enumerate(episodes, 1):
-        print(wrapped(f"{n}. [{ep['id']}] ({fmt_duration(ep['duration'])}) {os.path.basename(ep['path'])}",
-                      indent="       ", first="  "))
+    for n, ep in enumerate(episodes):
+        # Copies of the same recording share an episode number; the one with the summary comes first.
+        label = "copy" if n and ep["episode"] == episodes[n - 1]["episode"] else f"{ep['episode']}."
+        print(wrapped(f"{label:>4} [{ep['id']}] ({fmt_duration(ep['duration'])}) {os.path.basename(ep['path'])}",
+                      indent="       ", first=""))
         if ep["summary"]:
             print(wrapped(ep["summary"], indent="       "))
     return 0

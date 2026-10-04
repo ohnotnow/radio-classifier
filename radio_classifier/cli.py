@@ -1,7 +1,7 @@
 import argparse
 
 from . import classify as classify_mod
-from . import db, scan as scan_mod, search as search_mod, summarise as summarise_mod, transcribe as transcribe_mod
+from . import db, excludes, scan as scan_mod, search as search_mod, summarise as summarise_mod, transcribe as transcribe_mod
 
 
 def main(argv=None):
@@ -26,7 +26,7 @@ def main(argv=None):
     p.add_argument("--verdict", default="likely", help="Comma list: likely,maybe,unlikely or all (default: likely)")
     p.add_argument("--deepen", action="store_true", help="Also re-transcribe files whose existing transcript is shorter than --seconds")
     p.add_argument("--exclude", action="append", default=[], metavar="REGEX",
-                   help="Skip files whose path/tags match (repeatable)")
+                   help="Also skip files whose path/tags match, on top of the `exclude` list (repeatable)")
     p.add_argument("--pause", type=float, default=0.0, metavar="SECS",
                    help="Cool-down sleep between files (thermal relief)")
     p.add_argument("--gentle", action="store_true",
@@ -37,12 +37,22 @@ def main(argv=None):
                         "07:00-23:00 so the computer stays usable, full-speed GPU "
                         "overnight with a cool-down pause so the fans stay quiet")
 
-    p = sub.add_parser("summarise", help="LLM blurb per story, and a summary per drama/reading episode")
-    p.add_argument("--like", metavar="PATTERN", help="Only files whose path matches this SQL LIKE pattern")
-    p.add_argument("--limit", type=int, help="Stop after N stories")
+    p = sub.add_parser("summarise", help="Group files into stories; LLM blurb per story, summary per drama/reading episode")
+    p.add_argument("--like", metavar="PATTERN", help="Only folders holding a file whose path matches this SQL LIKE pattern")
+    p.add_argument("--limit", type=int, help="Stop after grouping N folders and describing N stories")
     p.add_argument("--exclude", action="append", default=[], metavar="REGEX",
-                   help="Skip folders whose path matches (repeatable)")
-    p.add_argument("--dry-run", action="store_true", help="List the stories that would be summarised; no LLM calls")
+                   help="Also skip files whose path/tags match, on top of the `exclude` list (repeatable)")
+    p.add_argument("--dry-run", action="store_true", help="List the folders to group and count the work waiting; no LLM calls")
+    p.add_argument("--group-only", action="store_true", help="Group folders into stories, then stop before describing them")
+
+    p = sub.add_parser("exclude", help="Patterns for files never to transcribe or summarise")
+    actions = p.add_subparsers(dest="action", required=True)
+    a = actions.add_parser("add", help="Add a regex (case-insensitive, matched against path and tags) and show what it matches")
+    a.add_argument("pattern")
+    a.add_argument("--note", help="Why, for future you")
+    actions.add_parser("list", help="List the patterns and how many files each matches")
+    a = actions.add_parser("remove", help="Remove a pattern by id")
+    a.add_argument("id", type=int)
 
     p = sub.add_parser("search", help="Full-text search transcripts (and paths/tags)")
     p.add_argument("query", nargs="+")
@@ -80,8 +90,14 @@ def main(argv=None):
                 workday=args.workday,
             )
         if args.command == "summarise":
-            return summarise_mod.summarise(con, like=args.like, limit=args.limit,
-                                           exclude=args.exclude, dry_run=args.dry_run)
+            return summarise_mod.summarise(con, like=args.like, limit=args.limit, exclude=args.exclude,
+                                           dry_run_only=args.dry_run, group_only=args.group_only)
+        if args.command == "exclude":
+            if args.action == "add":
+                return excludes.add(con, args.pattern, args.note)
+            if args.action == "list":
+                return excludes.list_all(con)
+            return excludes.remove(con, args.id)
         if args.command == "search":
             return search_mod.search(con, " ".join(args.query), limit=args.limit, any_word=args.any)
         if args.command == "grep":

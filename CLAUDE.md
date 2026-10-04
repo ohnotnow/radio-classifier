@@ -4,7 +4,7 @@ Local CLI that finds radio dramas in a large, badly named audio collection by tr
 
 ## Running things
 
-- `uv run python -m radio_classifier <command>`; commands are `scan`, `classify`, `transcribe`, `search`, `grep`, `show`, `export`, `stats`.
+- `uv run python -m radio_classifier <command>`; commands are `scan`, `classify`, `transcribe`, `summarise`, `exclude`, `search`, `grep`, `show`, `export`, `stats`.
 - Scratch scripts that import the package need `PYTHONPATH=.` (it isn't installed as a package).
 - There is no test suite yet.
 
@@ -16,9 +16,11 @@ Local CLI that finds radio dramas in a large, badly named audio collection by tr
 ## Layout
 
 - `cli.py`: argparse subcommands, dispatches to the modules below.
-- `db.py`: schema (`files`, `transcripts`, `segments`, FTS5 `search_index`) and write helpers.
+- `db.py`: schema (`files`, `transcripts`, `segments`, `stories`, `story_files`, `summaries`, `excludes`, FTS5 `search_index`) and write helpers.
 - `scan.py`, `classify.py`: metadata sweep and heuristic scoring.
 - `transcribe.py`: candidate selection (`pick_candidates`), ffmpeg clipping, ASR (`make_asr`), the per-file commit loop, `--workday` scheduling.
+- `summarise.py`: grouping folders into stories (LLM for mixed folders, windows plus a merge pass for big ones), story listings, episode summaries. Design and trial evidence in ant note racl-mjBCN.
+- `excludes.py`: the `excludes` table of regexes that `transcribe` and `summarise` skip, and the path/tags haystack they and `grep` match against.
 - `search.py`: `search`, `grep`, `show`, `export`, `stats`.
 
 ## Things learned the hard way

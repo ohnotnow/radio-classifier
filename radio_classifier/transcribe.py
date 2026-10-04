@@ -6,7 +6,7 @@ import time
 
 import mlx.core as mx
 
-from . import db
+from . import db, excludes
 
 DEFAULT_MODEL = "mlx-community/parakeet-tdt-0.6b-v2"
 
@@ -51,7 +51,7 @@ def clip_to_wav(src, seconds, wav_path, force_format=None):
 
 
 def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
-    exclude_rx = [re.compile(pat, re.I) for pat in exclude]
+    excluded = excludes.matcher(con, exclude)
     rows = con.execute(
         """
         SELECT f.id, f.path, f.duration, f.score, f.artist, f.album, f.title,
@@ -66,12 +66,8 @@ def pick_candidates(con, verdicts, seconds, deepen, exclude=()):
     ).fetchall()
 
     def wanted(row):
-        if exclude_rx:
-            haystack = " | ".join(
-                str(v) for v in (row["path"], row["artist"], row["album"], row["title"]) if v
-            )
-            if any(rx.search(haystack) for rx in exclude_rx):
-                return False
+        if excluded(row):
+            return False
         if row["done_seconds"] is None:
             return True
         if not deepen:
